@@ -1,7 +1,7 @@
 {
   "name": "effect-fc",
   "description": "Write React function components with Effect",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "files": [
     "./README.md",
@@ -36,6 +36,9 @@
     "clean:cache": "rm -rf .turbo tsconfig.tsbuildinfo",
     "clean:dist": "rm -rf dist",
     "clean:modules": "rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "^0.74.0"
   },
   "peerDependencies": {
     "@types/react": "^19.2.0",

@@ -35,6 +35,8 @@ extends Pipeable.Pipeable {
     field<const P extends PropertyPath.Paths<I>>(
         path: P
     ): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>>
+
+    readonly run: Effect.Effect<void>
     readonly submit: Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException>
 }
 
@@ -68,7 +70,7 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
                 Option.isSome(value) &&
                 Option.isNone(error) &&
                 Option.isNone(validationFiber) &&
-                !(Result.isRunning(result) || Result.isRefreshing(result))
+                !(Result.isRunning(result) || Result.hasRefreshingFlag(result))
             ),
         )
     }
@@ -76,19 +78,62 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
     field<const P extends PropertyPath.Paths<I>>(
         path: P
     ): Effect.Effect<FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>> {
+        const key = new FormFieldKey(path)
         return this.fieldCache.pipe(
-            Effect.map(HashMap.get(new FormFieldKey(path))),
+            Effect.map(HashMap.get(key)),
             Effect.flatMap(Option.match({
                 onSome: v => Effect.succeed(v as FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>>),
                 onNone: () => Effect.tap(
                     Effect.succeed(makeFormField(this as Form<A, I, R, MA, ME, MR, MP>, path)),
-                    v => Ref.update(this.fieldCache, HashMap.set(new FormFieldKey(path), v as FormField<unknown, unknown>)),
+                    v => Ref.update(this.fieldCache, HashMap.set(key, v as FormField<unknown, unknown>)),
                 ),
             })),
         )
     }
 
-    readonly canSubmit: Subscribable.Subscribable<boolean, never, never>
+    readonly canSubmit: Subscribable.Subscribable<boolean>
+
+    get run(): Effect.Effect<void> {
+        return this.runSemaphore.withPermits(1)(Stream.runForEach(
+            this.encodedValue.changes.pipe(
+                Option.isSome(this.debounce) ? Stream.debounce(this.debounce.value) : identity
+            ),
+
+            encodedValue => this.validationFiber.pipe(
+                Effect.andThen(Option.match({
+                    onSome: Fiber.interrupt,
+                    onNone: () => Effect.void,
+                })),
+                Effect.andThen(
+                    Effect.forkScoped(Effect.onExit(
+                        Schema.decode(this.schema, { errors: "all" })(encodedValue),
+                        exit => Effect.andThen(
+                            Exit.matchEffect(exit, {
+                                onSuccess: v => Effect.andThen(
+                                    Ref.set(this.value, Option.some(v)),
+                                    Ref.set(this.error, Option.none()),
+                                ),
+                                onFailure: c => Option.match(Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"), {
+                                    onSome: e => Ref.set(this.error, Option.some(e)),
+                                    onNone: () => Effect.void,
+                                }),
+                            }),
+                            Ref.set(this.validationFiber, Option.none()),
+                        ),
+                    )).pipe(
+                        Effect.tap(fiber => Ref.set(this.validationFiber, Option.some(fiber))),
+                        Effect.andThen(Fiber.join),
+                        Effect.andThen(value => this.autosubmit
+                            ? Effect.asVoid(Effect.forkScoped(this.submitValue(value)))
+                            : Effect.void
+                        ),
+                        Effect.forkScoped,
+                    )
+                ),
+                Effect.provide(this.context),
+            ),
+        ))
+    }
 
     get submit(): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException> {
         return this.value.pipe(
@@ -96,6 +141,7 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
             Effect.andThen(value => this.submitValue(value)),
         )
     }
+
     submitValue(value: A): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>> {
         return Effect.whenEffect(
             Effect.tap(
@@ -120,7 +166,7 @@ extends Pipeable.Class() implements Form<A, I, R, MA, ME, MR, MP> {
 
 export const isForm = (u: unknown): u is Form<unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
 
-export namespace make {
+export declare namespace make {
     export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
     extends Mutation.make.Options<
         readonly [value: NoInfer<A>, form: Form<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>],
@@ -157,52 +203,7 @@ export const make = Effect.fnUntraced(function* <A, I = A, R = never, MA = void,
     )
 })
 
-export const run = <A, I, R, MA, ME, MR, MP>(
-    self: Form<A, I, R, MA, ME, MR, MP>
-): Effect.Effect<void> => {
-    const _self = self as FormImpl<A, I, R, MA, ME, MR, MP>
-    return _self.runSemaphore.withPermits(1)(Stream.runForEach(
-        _self.encodedValue.changes.pipe(
-            Option.isSome(_self.debounce) ? Stream.debounce(_self.debounce.value) : identity
-        ),
-
-        encodedValue => _self.validationFiber.pipe(
-            Effect.andThen(Option.match({
-                onSome: Fiber.interrupt,
-                onNone: () => Effect.void,
-            })),
-            Effect.andThen(
-                Effect.forkScoped(Effect.onExit(
-                    Schema.decode(_self.schema, { errors: "all" })(encodedValue),
-                    exit => Effect.andThen(
-                        Exit.matchEffect(exit, {
-                            onSuccess: v => Effect.andThen(
-                                Ref.set(_self.value, Option.some(v)),
-                                Ref.set(_self.error, Option.none()),
-                            ),
-                            onFailure: c => Option.match(Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"), {
-                                onSome: e => Ref.set(_self.error, Option.some(e)),
-                                onNone: () => Effect.void,
-                            }),
-                        }),
-                        Ref.set(_self.validationFiber, Option.none()),
-                    ),
-                )).pipe(
-                    Effect.tap(fiber => Ref.set(_self.validationFiber, Option.some(fiber))),
-                    Effect.andThen(Fiber.join),
-                    Effect.andThen(value => _self.autosubmit
-                        ? Effect.asVoid(Effect.forkScoped(_self.submitValue(value)))
-                        : Effect.void
-                    ),
-                    Effect.forkScoped,
-                )
-            ),
-            Effect.provide(_self.context),
-        ),
-    ))
-}
-
-export namespace service {
+export declare namespace service {
     export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
     extends make.Options<A, I, R, MA, ME, MR, MP> {}
 }
@@ -215,7 +216,7 @@ export const service = <A, I = A, R = never, MA = void, ME = never, MR = never, 
     Scope.Scope | R | Result.forkEffect.OutputContext<MA, ME, MR, MP>
 > => Effect.tap(
     make(options),
-    form => Effect.forkScoped(run(form)),
+    form => Effect.forkScoped(form.run),
 )
 
 
@@ -259,7 +260,7 @@ class FormFieldKey implements Equal.Equal {
         return isFormFieldKey(that) && PropertyPath.equivalence(this.path, that.path)
     }
     [Hash.symbol]() {
-        return 0
+        return Hash.array(this.path)
     }
 }
 
@@ -270,22 +271,21 @@ export const makeFormField = <A, I, R, MA, ME, MR, MP, const P extends PropertyP
     self: Form<A, I, R, MA, ME, MR, MP>,
     path: P,
 ): FormField<PropertyPath.ValueFromPath<A, P>, PropertyPath.ValueFromPath<I, P>> => {
-    const _self = self as FormImpl<A, I, R, MA, ME, MR, MP>
     return new FormFieldImpl(
-        Subscribable.mapEffect(_self.value, Option.match({
+        Subscribable.mapEffect(self.value, Option.match({
             onSome: v => Option.map(PropertyPath.get(v, path), Option.some),
             onNone: () => Option.some(Option.none()),
         })),
-        SubscriptionSubRef.makeFromPath(_self.encodedValue, path),
-        Subscribable.mapEffect(_self.error, Option.match({
+        SubscriptionSubRef.makeFromPath(self.encodedValue, path),
+        Subscribable.mapEffect(self.error, Option.match({
             onSome: flow(
                 ParseResult.ArrayFormatter.formatError,
                 Effect.map(Array.filter(issue => PropertyPath.equivalence(issue.path, path))),
             ),
             onNone: () => Effect.succeed([]),
         })),
-        Subscribable.map(_self.validationFiber, Option.isSome),
-        Subscribable.map(_self.mutation.result, result => Result.isRunning(result) || Result.isRefreshing(result)),
+        Subscribable.map(self.validationFiber, Option.isSome),
+        Subscribable.map(self.mutation.result, result => Result.isRunning(result) || Result.hasRefreshingFlag(result)),
     )
 }
 
@@ -295,7 +295,7 @@ export namespace useInput {
         readonly debounce?: Duration.DurationInput
     }
 
-    export interface Result<T> {
+    export interface Success<T> {
         readonly value: T
         readonly setValue: React.Dispatch<React.SetStateAction<T>>
     }
@@ -304,7 +304,7 @@ export namespace useInput {
 export const useInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, I>,
     options?: useInput.Options,
-): Effect.fn.Return<useInput.Result<I>, Cause.NoSuchElementException, Scope.Scope> {
+): Effect.fn.Return<useInput.Success<I>, Cause.NoSuchElementException, Scope.Scope> {
     const internalValueRef = yield* Component.useOnChange(() => Effect.tap(
         Effect.andThen(field.encodedValue, SubscriptionRef.make),
         internalValueRef => Effect.forkScoped(Effect.all([
@@ -336,7 +336,7 @@ export namespace useOptionalInput {
         readonly defaultValue: T
     }
 
-    export interface Result<T> extends useInput.Result<T> {
+    export interface Success<T> extends useInput.Success<T> {
         readonly enabled: boolean
         readonly setEnabled: React.Dispatch<React.SetStateAction<boolean>>
     }
@@ -345,7 +345,7 @@ export namespace useOptionalInput {
 export const useOptionalInput = Effect.fnUntraced(function* <A, I>(
     field: FormField<A, Option.Option<I>>,
     options: useOptionalInput.Options<I>,
-): Effect.fn.Return<useOptionalInput.Result<I>, Cause.NoSuchElementException, Scope.Scope> {
+): Effect.fn.Return<useOptionalInput.Success<I>, Cause.NoSuchElementException, Scope.Scope> {
     const [enabledRef, internalValueRef] = yield* Component.useOnChange(() => Effect.tap(
         Effect.andThen(
             field.encodedValue,

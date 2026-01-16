@@ -20,7 +20,7 @@ export namespace Async {
 }
 
 
-const SuspenseProto = Object.freeze({
+const AsyncProto = Object.freeze({
     [TypeId]: TypeId,
 
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
@@ -63,7 +63,7 @@ export const async = <T extends Component.Component<any, any, any, any>>(
 ) => Object.setPrototypeOf(
     Object.assign(function() {}, self),
     Object.freeze(Object.setPrototypeOf(
-        Object.assign({}, SuspenseProto),
+        Object.assign({}, AsyncProto),
         Object.getPrototypeOf(self),
     )),
 )

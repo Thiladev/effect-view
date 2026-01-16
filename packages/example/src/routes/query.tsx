@@ -18,16 +18,16 @@ const ResultView = Component.makeUntraced("Result")(function*() {
 
     const [idRef, query, mutation] = yield* Component.useOnMount(() => Effect.gen(function*() {
         const idRef = yield* SubscriptionRef.make(1)
-        const key = Stream.zipLatest(Stream.make("posts" as const), idRef.changes)
 
         const query = yield* Query.service({
-            key,
+            key: Stream.zipLatest(Stream.make("posts" as const), idRef.changes),
             f: ([, id]) => HttpClient.HttpClient.pipe(
                 Effect.tap(Effect.sleep("500 millis")),
                 Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
                 Effect.andThen(response => response.json),
                 Effect.andThen(Schema.decodeUnknown(Post)),
             ),
+            staleTime: "10 seconds",
         })
 
         const mutation = yield* Mutation.make({
@@ -74,7 +74,7 @@ const ResultView = Component.makeUntraced("Result")(function*() {
                         Match.tag("Success", result => <>
                             <Heading>{result.value.title}</Heading>
                             <Text>{result.value.body}</Text>
-                            {Result.isRefreshing(result) && <Text>Refreshing...</Text>}
+                            {Result.hasRefreshingFlag(result) && <Text>Refreshing...</Text>}
                         </>),
                         Match.tag("Failure", result =>
                             <Text>An error has occured: {result.cause.toString()}</Text>
@@ -85,7 +85,7 @@ const ResultView = Component.makeUntraced("Result")(function*() {
 
                 <Flex direction="row" justify="center" align="center" gap="1">
                     <Button onClick={() => runPromise(query.refresh)}>Refresh</Button>
-                    <Button onClick={() => runPromise(query.refetch)}>Refetch</Button>
+                    <Button onClick={() => runPromise(query.invalidateCache)}>Invalidate cache</Button>
                 </Flex>
 
                 <div>
@@ -94,7 +94,7 @@ const ResultView = Component.makeUntraced("Result")(function*() {
                         Match.tag("Success", result => <>
                             <Heading>{result.value.title}</Heading>
                             <Text>{result.value.body}</Text>
-                            {Result.isRefreshing(result) && <Text>Refreshing...</Text>}
+                            {Result.hasRefreshingFlag(result) && <Text>Refreshing...</Text>}
                         </>),
                         Match.tag("Failure", result =>
                             <Text>An error has occured: {result.cause.toString()}</Text>

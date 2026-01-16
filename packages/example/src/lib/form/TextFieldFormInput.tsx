@@ -20,8 +20,8 @@ export type TextFieldFormInputProps = Props | OptionalProps
 
 export class TextFieldFormInput extends Component.makeUntraced("TextFieldFormInput")(function*(props: TextFieldFormInputProps) {
     const input: (
-        | { readonly optional: true } & Form.useOptionalInput.Result<string>
-        | { readonly optional: false } & Form.useInput.Result<string>
+        | { readonly optional: true } & Form.useOptionalInput.Success<string>
+        | { readonly optional: false } & Form.useInput.Success<string>
     ) = props.optional
         // biome-ignore lint/correctness/useHookAtTopLevel: "optional" reactivity not supported
         ? { optional: true, ...yield* Form.useOptionalInput(props.field, props) }

@@ -1,4 +1,4 @@
-import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, Option, Pipeable, Predicate, PubSub, pipe, Ref, type Scope, Stream, Subscribable } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, Pipeable, Predicate, PubSub, pipe, Ref, type Scope, Stream, Subscribable } from "effect"
 
 
 export const ResultTypeId: unique symbol = Symbol.for("@effect-fc/Result/Result")
@@ -10,14 +10,11 @@ export type Result<A, E = never, P = never> = (
     | Final<A, E, P>
 )
 
-export type Final<A, E = never, P = never> = (
-    | Success<A>
-    | (Success<A> & Refreshing<P>)
-    | Failure<A, E>
-    | (Failure<A, E> & Refreshing<P>)
-)
+// biome-ignore lint/complexity/noBannedTypes: "{}" is relevant here
+export type Final<A, E = never, P = never> = (Success<A> | Failure<E>) & ({} | Flags<P>)
+export type Flags<P = never> = WillFetch | WillRefresh | Refreshing<P>
 
-export namespace Result {
+export declare namespace Result {
     export interface Prototype extends Pipeable.Pipeable, Equal.Equal {
         readonly [ResultTypeId]: ResultTypeId
     }
@@ -25,6 +22,10 @@ export namespace Result {
     export type Success<R extends Result<any, any, any>> = [R] extends [Result<infer A, infer _E, infer _P>] ? A : never
     export type Failure<R extends Result<any, any, any>> = [R] extends [Result<infer _A, infer E, infer _P>] ? E : never
     export type Progress<R extends Result<any, any, any>> = [R] extends [Result<infer _A, infer _E, infer P>] ? P : never
+}
+
+export declare namespace Flags {
+    export type Keys = keyof WillFetch & WillRefresh & Refreshing<any>
 }
 
 export interface Initial extends Result.Prototype {
@@ -41,14 +42,21 @@ export interface Success<A> extends Result.Prototype {
     readonly value: A
 }
 
-export interface Failure<A, E = never> extends Result.Prototype {
+export interface Failure<E = never> extends Result.Prototype {
     readonly _tag: "Failure"
     readonly cause: Cause.Cause<E>
-    readonly previousSuccess: Option.Option<Success<A>>
+}
+
+export interface WillFetch {
+    readonly _flag: "WillFetch"
+}
+
+export interface WillRefresh {
+    readonly _flag: "WillRefresh"
 }
 
 export interface Refreshing<P = never> {
-    readonly refreshing: true
+    readonly _flag: "Refreshing"
     readonly progress: P
 }
 
@@ -58,41 +66,32 @@ const ResultPrototype = Object.freeze({
     [ResultTypeId]: ResultTypeId,
 
     [Equal.symbol](this: Result<any, any, any>, that: Result<any, any, any>): boolean {
-        if (this._tag !== that._tag)
+        if (this._tag !== that._tag || (this as Flags)._flag !== (that as Flags)._flag)
             return false
-
+        if (hasRefreshingFlag(this) && !Equal.equals(this.progress, (that as Refreshing<any>).progress))
+            return false
         return Match.value(this).pipe(
             Match.tag("Initial", () => true),
             Match.tag("Running", self => Equal.equals(self.progress, (that as Running<any>).progress)),
-            Match.tag("Success", self =>
-                Equal.equals(self.value, (that as Success<any>).value) &&
-                (isRefreshing(self) ? self.refreshing : false) === (isRefreshing(that) ? that.refreshing : false) &&
-                Equal.equals(isRefreshing(self) ? self.progress : undefined, isRefreshing(that) ? that.progress : undefined)
-            ),
-            Match.tag("Failure", self =>
-                Equal.equals(self.cause, (that as Failure<any, any>).cause) &&
-                (isRefreshing(self) ? self.refreshing : false) === (isRefreshing(that) ? that.refreshing : false) &&
-                Equal.equals(isRefreshing(self) ? self.progress : undefined, isRefreshing(that) ? that.progress : undefined)
-            ),
+            Match.tag("Success", self => Equal.equals(self.value, (that as Success<any>).value)),
+            Match.tag("Failure", self => Equal.equals(self.cause, (that as Failure<any>).cause)),
             Match.exhaustive,
         )
     },
 
     [Hash.symbol](this: Result<any, any, any>): number {
-        const tagHash = Hash.string(this._tag)
-
-        return Match.value(this).pipe(
-            Match.tag("Initial", () => tagHash),
-            Match.tag("Running", self => Hash.combine(Hash.hash(self.progress))(tagHash)),
-            Match.tag("Success", self => pipe(tagHash,
-                Hash.combine(Hash.hash(self.value)),
-                Hash.combine(Hash.hash(isRefreshing(self) ? self.progress : undefined)),
-            )),
-            Match.tag("Failure", self => pipe(tagHash,
-                Hash.combine(Hash.hash(self.cause)),
-                Hash.combine(Hash.hash(isRefreshing(self) ? self.progress : undefined)),
-            )),
-            Match.exhaustive,
+        return pipe(Hash.string(this._tag),
+            tagHash => Match.value(this).pipe(
+                Match.tag("Initial", () => tagHash),
+                Match.tag("Running", self => Hash.combine(Hash.hash(self.progress))(tagHash)),
+                Match.tag("Success", self => Hash.combine(Hash.hash(self.value))(tagHash)),
+                Match.tag("Failure", self => Hash.combine(Hash.hash(self.cause))(tagHash)),
+                Match.exhaustive,
+            ),
+            Hash.combine(Hash.hash((this as Flags)._flag)),
+            hash => hasRefreshingFlag(this)
+                ? Hash.combine(Hash.hash(this.progress))(hash)
+                : hash,
             Hash.cached(this),
         )
     },
@@ -104,8 +103,11 @@ export const isFinal = (u: unknown): u is Final<unknown, unknown, unknown> => is
 export const isInitial = (u: unknown): u is Initial => isResult(u) && u._tag === "Initial"
 export const isRunning = (u: unknown): u is Running<unknown> => isResult(u) && u._tag === "Running"
 export const isSuccess = (u: unknown): u is Success<unknown> => isResult(u) && u._tag === "Success"
-export const isFailure = (u: unknown): u is Failure<unknown, unknown> => isResult(u) && u._tag === "Failure"
-export const isRefreshing = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "refreshing") && u.refreshing
+export const isFailure = (u: unknown): u is Failure<unknown> => isResult(u) && u._tag === "Failure"
+export const hasFlag = (u: unknown): u is Flags => isResult(u) && Predicate.hasProperty(u, "_flag")
+export const hasWillFetchFlag = (u: unknown): u is WillFetch => isResult(u) && Predicate.hasProperty(u, "_flag") && u._flag === "WillFetch"
+export const hasWillRefreshFlag = (u: unknown): u is WillRefresh => isResult(u) && Predicate.hasProperty(u, "_flag") && u._flag === "WillRefresh"
+export const hasRefreshingFlag = (u: unknown): u is Refreshing<unknown> => isResult(u) && Predicate.hasProperty(u, "_flag") && u._flag === "Refreshing"
 
 export const initial: {
     (): Initial
@@ -113,34 +115,42 @@ export const initial: {
 } = (): Initial => Object.setPrototypeOf({ _tag: "Initial" }, ResultPrototype)
 export const running = <P = never>(progress?: P): Running<P> => Object.setPrototypeOf({ _tag: "Running", progress }, ResultPrototype)
 export const succeed = <A>(value: A): Success<A> => Object.setPrototypeOf({ _tag: "Success", value }, ResultPrototype)
+export const fail = <E>(cause: Cause.Cause<E> ): Failure<E> => Object.setPrototypeOf({ _tag: "Failure", cause }, ResultPrototype)
 
-export const fail = <E, A = never>(
-    cause: Cause.Cause<E>,
-    previousSuccess?: Success<NoInfer<A>>,
-): Failure<A, E> => Object.setPrototypeOf({
-    _tag: "Failure",
-    cause,
-    previousSuccess: Option.fromNullable(previousSuccess),
-}, ResultPrototype)
-
-export const refreshing = <R extends Success<any> | Failure<any, any>, P = never>(
-    result: R,
-    progress?: P,
-): Omit<R, keyof Refreshing<Result.Progress<R>>> & Refreshing<P> => Object.setPrototypeOf(
-    Object.assign({}, result, { refreshing: true, progress }),
+export const willFetch = <R extends Final<any, any, any>>(
+    result: R
+): Omit<R, keyof Flags.Keys> & WillFetch => Object.setPrototypeOf(
+    Object.assign({}, result, { _flag: "WillFetch" }),
     Object.getPrototypeOf(result),
 )
 
-export const fromExit = <A, E>(
-    exit: Exit.Exit<A, E>,
-    previousSuccess?: Success<NoInfer<A>>,
-): Success<A> | Failure<A, E> => exit._tag === "Success"
-    ? succeed(exit.value)
-    : fail(exit.cause, previousSuccess)
+export const willRefresh = <R extends Final<any, any, any>>(
+    result: R
+): Omit<R, keyof Flags.Keys> & WillRefresh => Object.setPrototypeOf(
+    Object.assign({}, result, { _flag: "WillRefresh" }),
+    Object.getPrototypeOf(result),
+)
 
-export const toExit = <A, E, P>(
-    self: Result<A, E, P>
-): Exit.Exit<A, E | Cause.NoSuchElementException> => {
+export const refreshing = <R extends Final<any, any, any>, P = never>(
+    result: R,
+    progress?: P,
+): Omit<R, keyof Flags.Keys> & Refreshing<P> => Object.setPrototypeOf(
+    Object.assign({}, result, { _flag: "Refreshing", progress }),
+    Object.getPrototypeOf(result),
+)
+
+export const fromExit: {
+    <A, E>(exit: Exit.Success<A, E>): Success<A>
+    <A, E>(exit: Exit.Failure<A, E>): Failure<E>
+    <A, E>(exit: Exit.Exit<A, E>): Success<A> | Failure<E>
+} = exit => (exit._tag === "Success" ? succeed(exit.value) : fail(exit.cause)) as any
+
+export const toExit: {
+    <A>(self: Success<A>): Exit.Success<A, never>
+    <E>(self: Failure<E>): Exit.Failure<never, E>
+    <A, E, P>(self: Final<A, E, P>): Exit.Exit<A, E>
+    <A, E, P>(self: Result<A, E, P>): Exit.Exit<A, E | Cause.NoSuchElementException>
+} = <A, E, P>(self: Result<A, E, P>): any => {
     switch (self._tag) {
         case "Success":
             return Exit.succeed(self.value)
@@ -179,17 +189,17 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
     const state = yield* State<A, E, P>()
 
     return {
-        update: <E, R>(f: (previous: P) => Effect.Effect<P, E, R>) => Effect.Do.pipe(
+        update: <FE, FR>(f: (previous: P) => Effect.Effect<P, FE, FR>) => Effect.Do.pipe(
             Effect.bind("previous", () => Effect.andThen(state.get, previous =>
-                isRunning(previous) || isRefreshing(previous)
+                (isRunning(previous) || hasRefreshingFlag(previous))
                     ? Effect.succeed(previous)
                     : Effect.fail(new PreviousResultNotRunningNorRefreshing({ previous })),
             )),
             Effect.bind("progress", ({ previous }) => f(previous.progress)),
-            Effect.let("next", ({ previous, progress }) => Object.setPrototypeOf(
-                Object.assign({}, previous, { progress }),
-                Object.getPrototypeOf(previous),
-            )),
+            Effect.let("next", ({ previous, progress }) => isRunning(previous)
+                ? running(progress)
+                : refreshing(previous, progress) as Final<A, E, P> & Refreshing<P>
+            ),
             Effect.andThen(({ next }) => state.set(next)),
         ),
     }
@@ -199,18 +209,10 @@ export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
 export namespace unsafeForkEffect {
     export type OutputContext<A, E, R, P> = Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
 
-    export type Options<A, E, P> = {
+    export interface Options<A, E, P> {
+        readonly initial?: Initial | Final<A, E, P>
         readonly initialProgress?: P
-        readonly previous?: Final<A, E, P>
-    } & (
-        | {
-            readonly refresh: true
-            readonly previous: Final<A, E, P>
-        }
-        | {
-            readonly refresh?: false
-        }
-    )
+    }
 }
 
 export const unsafeForkEffect = <A, E, R, P = never>(
@@ -221,16 +223,17 @@ export const unsafeForkEffect = <A, E, R, P = never>(
     never,
     Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
 > => Effect.Do.pipe(
-    Effect.bind("ref", () => Ref.make(initial<A, E, P>())),
+    Effect.bind("ref", () => Ref.make(options?.initial ?? initial<A, E, P>())),
     Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
     Effect.bind("fiber", ({ ref, pubsub }) => Effect.forkScoped(State<A, E, P>().pipe(
-        Effect.andThen(state => state.set(options?.refresh
-            ? refreshing(options.previous, options?.initialProgress) as Result<A, E, P>
-            : running(options?.initialProgress)
+        Effect.andThen(state => state.set(
+            (isFinal(options?.initial) && hasWillRefreshFlag(options?.initial))
+                ? refreshing(options.initial, options?.initialProgress) as Result<A, E, P>
+                : running(options?.initialProgress)
         ).pipe(
             Effect.andThen(effect),
             Effect.onExit(exit => Effect.andThen(
-                state.set(fromExit(exit, (options?.previous && isSuccess(options.previous)) ? options.previous : undefined)),
+                state.set(fromExit(exit)),
                 Effect.forkScoped(PubSub.shutdown(pubsub)),
             )),
         )),
@@ -261,7 +264,7 @@ export const unsafeForkEffect = <A, E, R, P = never>(
 export namespace forkEffect {
     export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
     export type OutputContext<A, E, R, P> = unsafeForkEffect.OutputContext<A, E, R, P>
-    export type Options<A, E, P> = unsafeForkEffect.Options<A, E, P>
+    export interface Options<A, E, P> extends unsafeForkEffect.Options<A, E, P> {}
 }
 
 export const forkEffect: {

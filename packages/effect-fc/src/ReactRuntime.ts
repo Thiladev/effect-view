@@ -3,6 +3,7 @@ import { Effect, Layer, ManagedRuntime, Predicate, Runtime, Scope } from "effect
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as ErrorObserver from "./ErrorObserver.js"
+import * as QueryClient from "./QueryClient.js"
 
 
 export const TypeId: unique symbol = Symbol.for("@effect-fc/ReactRuntime/ReactRuntime")
@@ -17,9 +18,14 @@ export interface ReactRuntime<R, ER> {
 
 const ReactRuntimeProto = Object.freeze({ [TypeId]: TypeId } as const)
 
-export const Prelude: Layer.Layer<Component.ScopeMap | ErrorObserver.ErrorObserver> = Layer.mergeAll(
+export const Prelude: Layer.Layer<
+    | Component.ScopeMap
+    | ErrorObserver.ErrorObserver
+    | QueryClient.QueryClient
+> = Layer.mergeAll(
     Component.ScopeMap.Default,
     ErrorObserver.layer,
+    QueryClient.QueryClient.Default,
 )
 
 
