@@ -1,17 +1,28 @@
-import { DateTime, Duration, Effect, Equal, Equivalence, Hash, HashMap, Pipeable, Predicate, type Scope, SubscriptionRef } from "effect"
+import { DateTime, Duration, Effect, Equal, Equivalence, Hash, HashMap, type Option, Pipeable, Predicate, Schedule, type Scope, type Subscribable, SubscriptionRef } from "effect"
 import type * as Query from "./Query.js"
 import type * as Result from "./Result.js"
 
 
-export const QueryClientServiceTypeId: unique symbol = Symbol.for("@effect-fc/QueryClient/QueryClientServiceTypeId")
+export const QueryClientServiceTypeId: unique symbol = Symbol.for("@effect-fc/QueryClient/QueryClientService")
 export type QueryClientServiceTypeId = typeof QueryClientServiceTypeId
 
 export interface QueryClientService extends Pipeable.Pipeable {
     readonly [QueryClientServiceTypeId]: QueryClientServiceTypeId
-    readonly cache: SubscriptionRef.SubscriptionRef<HashMap.HashMap<QueryClientCacheKey, QueryClientCacheEntry>>
-    readonly gcTime: Duration.DurationInput
+
+    readonly cache: Subscribable.Subscribable<HashMap.HashMap<QueryClientCacheKey, QueryClientCacheEntry>>
+    readonly cacheGcTime: Duration.DurationInput
     readonly defaultStaleTime: Duration.DurationInput
     readonly defaultRefreshOnWindowFocus: boolean
+
+    readonly run: Effect.Effect<void>
+    getCacheEntry(key: QueryClientCacheKey): Effect.Effect<Option.Option<QueryClientCacheEntry>>
+    setCacheEntry(
+        key: QueryClientCacheKey,
+        result: Result.Success<unknown>,
+        staleTime: Duration.DurationInput,
+    ): Effect.Effect<QueryClientCacheEntry>
+    invalidateCacheEntries(f: (key: Query.Query.AnyKey) => Effect.Effect<unknown, unknown, unknown>): Effect.Effect<void>
+    invalidateCacheEntry(key: QueryClientCacheKey): Effect.Effect<void>
 }
 
 export class QueryClient extends Effect.Service<QueryClient>()("@effect-fc/QueryClient/QueryClient", {
@@ -25,12 +36,56 @@ implements QueryClientService {
 
     constructor(
         readonly cache: SubscriptionRef.SubscriptionRef<HashMap.HashMap<QueryClientCacheKey, QueryClientCacheEntry>>,
-        readonly gcTime: Duration.DurationInput,
+        readonly cacheGcTime: Duration.DurationInput,
         readonly defaultStaleTime: Duration.DurationInput,
         readonly defaultRefreshOnWindowFocus: boolean,
         readonly runSemaphore: Effect.Semaphore,
     ) {
         super()
+    }
+
+    get run(): Effect.Effect<void> {
+        return this.runSemaphore.withPermits(1)(Effect.repeat(
+            Effect.andThen(
+                DateTime.now,
+                now => SubscriptionRef.update(this.cache, HashMap.filter(entry =>
+                    Duration.lessThan(
+                        DateTime.distanceDuration(entry.lastAccessedAt, now),
+                        Duration.sum(entry.staleTime, this.cacheGcTime),
+                    )
+                )),
+            ),
+            Schedule.spaced("30 second"),
+        ))
+    }
+
+    getCacheEntry(key: QueryClientCacheKey): Effect.Effect<Option.Option<QueryClientCacheEntry>> {
+        return Effect.all([
+            Effect.andThen(this.cache, HashMap.get(key)),
+            DateTime.now,
+        ]).pipe(
+            Effect.map(([entry, now]) => new QueryClientCacheEntry(entry.result, entry.staleTime, entry.createdAt, now)),
+            Effect.tap(entry => SubscriptionRef.update(this.cache, HashMap.set(key, entry))),
+            Effect.option,
+        )
+    }
+
+    setCacheEntry(
+        key: QueryClientCacheKey,
+        result: Result.Success<unknown>,
+        staleTime: Duration.DurationInput,
+    ): Effect.Effect<QueryClientCacheEntry> {
+        return DateTime.now.pipe(
+            Effect.map(now => new QueryClientCacheEntry(result, staleTime, now, now)),
+            Effect.tap(entry => SubscriptionRef.update(this.cache, HashMap.set(key, entry))),
+        )
+    }
+
+    invalidateCacheEntries(f: (key: Query.Query.AnyKey) => Effect.Effect<unknown, unknown, unknown>): Effect.Effect<void> {
+        return SubscriptionRef.update(this.cache, HashMap.filter((_, key) => !Equivalence.strict()(key.f, f)))
+    }
+    invalidateCacheEntry(key: QueryClientCacheKey): Effect.Effect<void> {
+        return SubscriptionRef.update(this.cache, HashMap.remove(key))
     }
 }
 
@@ -38,7 +93,7 @@ export const isQueryClientService = (u: unknown): u is QueryClientService => Pre
 
 export declare namespace make {
     export interface Options {
-        readonly gcTime?: Duration.DurationInput
+        readonly cacheGcTime?: Duration.DurationInput
         readonly defaultStaleTime?: Duration.DurationInput
         readonly defaultRefreshOnWindowFocus?: boolean
     }
@@ -47,14 +102,12 @@ export declare namespace make {
 export const make = Effect.fnUntraced(function* (options: make.Options = {}): Effect.fn.Return<QueryClientService> {
     return new QueryClientServiceImpl(
         yield* SubscriptionRef.make(HashMap.empty<QueryClientCacheKey, QueryClientCacheEntry>()),
-        options.gcTime ?? "5 minutes",
+        options.cacheGcTime ?? "5 minutes",
         options.defaultStaleTime ?? "0 minutes",
         options.defaultRefreshOnWindowFocus ?? true,
         yield* Effect.makeSemaphore(1),
     )
 })
-
-export const run = (_self: QueryClientService): Effect.Effect<void> => Effect.void
 
 export declare namespace service {
     export interface Options extends make.Options {}
@@ -62,7 +115,7 @@ export declare namespace service {
 
 export const service = (options?: service.Options): Effect.Effect<QueryClientService, never, Scope.Scope> => Effect.tap(
     make(options),
-    client => Effect.forkScoped(run(client)),
+    client => Effect.forkScoped(client.run),
 )
 
 
@@ -102,7 +155,9 @@ implements Pipeable.Pipeable {
 
     constructor(
         readonly result: Result.Success<unknown>,
+        readonly staleTime: Duration.DurationInput,
         readonly createdAt: DateTime.DateTime,
+        readonly lastAccessedAt: DateTime.DateTime,
     ) {
         super()
     }
@@ -111,9 +166,8 @@ implements Pipeable.Pipeable {
 export const isQueryClientCacheEntry = (u: unknown): u is QueryClientCacheEntry => Predicate.hasProperty(u, QueryClientCacheEntryTypeId)
 
 export const isQueryClientCacheEntryStale = (
-    self: QueryClientCacheEntry,
-    staleTime: Duration.DurationInput,
+    self: QueryClientCacheEntry
 ): Effect.Effect<boolean> => Effect.andThen(
     DateTime.now,
-    now => Duration.greaterThanOrEqualTo(DateTime.distanceDuration(self.createdAt, now), staleTime),
+    now => Duration.greaterThanOrEqualTo(DateTime.distanceDuration(self.createdAt, now), self.staleTime),
 )

@@ -1,31 +1,25 @@
 # Effect FC
 
-[Effect-TS](https://effect.website/) integration for React 19+ that allows you to write function components using Effect generators.
+[Effect-TS](https://effect.website/) integration for React 19.2+ that allows you to write function components using Effect generators.
 
 This library is in early development. While it is (almost) feature complete and mostly usable, expect bugs and quirks. Things are still being ironed out, so ideas and criticisms are more than welcome.
 
 Documentation is currently being written. In the meantime, you can take a look at the `packages/example` directory.
 
 ## Peer dependencies
-- `effect` 3.15+
-- `react` & `@types/react` 19+
+- `effect` 3.19+
+- `react` & `@types/react` 19.2+
 
 ## Known issues
 - React Refresh doesn't work for Effect FC's yet. Page reload is required to view changes. Regular React components are unaffected.
 
 ## What writing components looks like
 ```typescript
-import { Component } from "effect-fc"
-import { useOnce, useSubscribables } from "effect-fc/Hooks"
-import { Todo } from "./Todo"
-import { TodosState } from "./TodosState.service"
-
-
-export class Todos extends Component.makeUntraced("Todos")(function*() {
+export class Todos extends Component.make("Todos")(function*() {
     const state = yield* TodosState
     const [todos] = yield* useSubscribables(state.ref)
 
-    yield* useOnce(() => Effect.andThen(
+    yield* useOnMount(() => Effect.andThen(
         Console.log("Todos mounted"),
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
@@ -49,8 +43,8 @@ export class Todos extends Component.makeUntraced("Todos")(function*() {
 
 const TodosStateLive = TodosState.Default("todos")
 
-const Index = Component.makeUntraced("Index")(function*() {
-    const context = yield* useContext(TodosStateLive, { finalizerExecutionMode: "fork" })
+const Index = Component.make("Index")(function*() {
+    const context = yield* useContext(TodosStateLive)
     const TodosFC = yield* Effect.provide(Todos, context)
 
     return <TodosFC />

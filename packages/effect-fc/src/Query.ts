@@ -1,4 +1,4 @@
-import { type Cause, type Context, DateTime, type Duration, Effect, Equal, Equivalence, Fiber, HashMap, identity, Option, Pipeable, Predicate, type Scope, Stream, Subscribable, SubscriptionRef } from "effect"
+import { type Cause, type Context, type Duration, Effect, Equal, Fiber, identity, Option, Pipeable, Predicate, type Scope, Stream, Subscribable, SubscriptionRef } from "effect"
 import * as QueryClient from "./QueryClient.js"
 import * as Result from "./Result.js"
 
@@ -80,7 +80,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         )
     }
 
-    get interrupt(): Effect.Effect<void, never, never> {
+    get interrupt(): Effect.Effect<void> {
         return Effect.andThen(this.fiber, Option.match({
             onSome: Fiber.interrupt,
             onNone: () => Effect.void,
@@ -159,7 +159,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     > {
         return Effect.andThen(this.getCacheEntry(key), Option.match({
             onSome: entry => Effect.andThen(
-                QueryClient.isQueryClientCacheEntryStale(entry, this.staleTime),
+                QueryClient.isQueryClientCacheEntryStale(entry),
                 isStale => isStale
                     ? this.start(key, Result.willRefresh(entry.result) as Result.Final<A, E, P>)
                     : Effect.succeed(Subscribable.make({
@@ -212,7 +212,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
             ) as Effect.Effect<Result.Final<A, E, P>>),
             Effect.tap(result => SubscriptionRef.set(this.latestFinalResult, Option.some(result))),
             Effect.tap(result => Result.isSuccess(result)
-                ? this.updateCacheEntry(key, result)
+                ? this.setCacheEntry(key, result)
                 : Effect.void
             ),
         )
@@ -225,44 +225,41 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     getCacheEntry(
         key: K
     ): Effect.Effect<Option.Option<QueryClient.QueryClientCacheEntry>, never, QueryClient.QueryClient> {
-        return QueryClient.QueryClient.pipe(
-            Effect.andThen(client => client.cache),
-            Effect.map(HashMap.get(this.makeCacheKey(key))),
+        return Effect.andThen(
+            Effect.all([
+                Effect.succeed(this.makeCacheKey(key)),
+                QueryClient.QueryClient,
+            ]),
+            ([key, client]) => client.getCacheEntry(key),
         )
     }
 
-    updateCacheEntry(
+    setCacheEntry(
         key: K,
         result: Result.Success<A>,
     ): Effect.Effect<QueryClient.QueryClientCacheEntry, never, QueryClient.QueryClient> {
-        return Effect.Do.pipe(
-            Effect.bind("client", () => QueryClient.QueryClient),
-            Effect.bind("now", () => DateTime.now),
-            Effect.let("entry", ({ now }) => new QueryClient.QueryClientCacheEntry(result, now)),
-            Effect.tap(({ client, entry }) => SubscriptionRef.update(
-                client.cache,
-                HashMap.set(this.makeCacheKey(key), entry),
-            )),
-            Effect.map(({ entry }) => entry),
+        return Effect.andThen(
+            Effect.all([
+                Effect.succeed(this.makeCacheKey(key)),
+                QueryClient.QueryClient,
+            ]),
+            ([key, client]) => client.setCacheEntry(key, result, this.staleTime),
         )
     }
 
     get invalidateCache(): Effect.Effect<void> {
         return QueryClient.QueryClient.pipe(
-            Effect.andThen(client => SubscriptionRef.update(
-                client.cache,
-                HashMap.filter((_, key) => !Equivalence.strict()(key.f, this.f)),
-            )),
+            Effect.andThen(client => client.invalidateCacheEntries(this.f as (key: Query.AnyKey) => Effect.Effect<unknown, unknown, unknown>)),
             Effect.provide(this.context),
         )
     }
 
     invalidateCacheEntry(key: K): Effect.Effect<void> {
-        return QueryClient.QueryClient.pipe(
-            Effect.andThen(client => SubscriptionRef.update(
-                client.cache,
-                HashMap.remove(this.makeCacheKey(key)),
-            )),
+        return Effect.all([
+            Effect.succeed(this.makeCacheKey(key)),
+            QueryClient.QueryClient,
+        ]).pipe(
+            Effect.andThen(([key, client]) => client.invalidateCacheEntry(key)),
             Effect.provide(this.context),
         )
     }
