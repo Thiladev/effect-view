@@ -19,7 +19,7 @@ export interface MemoizedOptions<P> {
 export const MemoizedPrototype = Object.freeze({
     [TypeId]: TypeId,
 
-    transformComponent<P extends {}>(
+    transformFunctionComponent<P extends {}>(
         this: Memoized<P>,
         f: React.FC<P>,
     ) {
