@@ -14,7 +14,7 @@ export class Todos extends Component.makeUntraced("Todos")(function*() {
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
 
-    const TodoFC = yield* Todo
+    const TodoFC = yield* Todo.use
 
     return (
         <Container>

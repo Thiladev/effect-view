@@ -83,7 +83,7 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
 
     const runSync = yield* Component.useRunSync()
     const runPromise = yield* Component.useRunPromise<DateTime.CurrentTimeZone>()
-    const TextFieldFormInputFC = yield* TextFieldFormInput
+    const TextFieldFormInputFC = yield* TextFieldFormInput.use
 
 
     return (

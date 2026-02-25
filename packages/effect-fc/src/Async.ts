@@ -7,29 +7,27 @@ import * as Component from "./Component.js"
 export const TypeId: unique symbol = Symbol.for("@effect-fc/Async/Async")
 export type TypeId = typeof TypeId
 
-export interface Async extends Async.Options {
+export interface Async extends AsyncOptions {
     readonly [TypeId]: TypeId
 }
 
-export namespace Async {
-    export interface Options {
-        readonly defaultFallback?: React.ReactNode
-    }
-
-    export type Props = Omit<React.SuspenseProps, "children">
+export interface AsyncOptions {
+    readonly defaultFallback?: React.ReactNode
 }
 
+export type AsyncProps = Omit<React.SuspenseProps, "children">
 
-const AsyncProto = Object.freeze({
+
+export const AsyncPrototype = Object.freeze({
     [TypeId]: TypeId,
 
-    makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
+    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
         this: Component.Component<P, A, E, R> & Async,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
         const SuspenseInner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
 
-        return ({ fallback, name, ...props }: Async.Props) => {
+        return ({ fallback, name, ...props }: AsyncProps) => {
             const promise = Runtime.runPromise(runtimeRef.current)(
                 Effect.andThen(
                     Component.useScope([], this),
@@ -54,7 +52,7 @@ export const async = <T extends Component.Component<any, any, any, any>>(
 ): (
     & Omit<T, keyof Component.Component.AsComponent<T>>
     & Component.Component<
-        Component.Component.Props<T> & Async.Props,
+        Component.Component.Props<T> & AsyncProps,
         Component.Component.Success<T>,
         Component.Component.Error<T>,
         Component.Component.Context<T>
@@ -63,22 +61,22 @@ export const async = <T extends Component.Component<any, any, any, any>>(
 ) => Object.setPrototypeOf(
     Object.assign(function() {}, self),
     Object.freeze(Object.setPrototypeOf(
-        Object.assign({}, AsyncProto),
+        Object.assign({}, AsyncPrototype),
         Object.getPrototypeOf(self),
     )),
 )
 
 export const withOptions: {
     <T extends Component.Component<any, any, any, any> & Async>(
-        options: Partial<Async.Options>
+        options: Partial<AsyncOptions>
     ): (self: T) => T
     <T extends Component.Component<any, any, any, any> & Async>(
         self: T,
-        options: Partial<Async.Options>,
+        options: Partial<AsyncOptions>,
     ): T
 } = Function.dual(2, <T extends Component.Component<any, any, any, any> & Async>(
     self: T,
-    options: Partial<Async.Options>,
+    options: Partial<AsyncOptions>,
 ): T => Object.setPrototypeOf(
     Object.assign(function() {}, self, options),
     Object.getPrototypeOf(self),

@@ -70,7 +70,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
     ])
 
     const runPromise = yield* Component.useRunPromise()
-    const TextFieldFormInputFC = yield* TextFieldFormInput
+    const TextFieldFormInputFC = yield* TextFieldFormInput.use
 
     yield* Component.useOnMount(() => Effect.gen(function*() {
         yield* Effect.addFinalizer(() => Console.log("RegisterFormView unmounted"))
@@ -117,7 +117,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
 
 const RegisterPage = Component.makeUntraced("RegisterPage")(function*() {
     const RegisterFormViewFC = yield* Effect.provide(
-        RegisterFormView,
+        RegisterFormView.use,
         yield* Component.useContext(RegisterForm.Default),
     )
 

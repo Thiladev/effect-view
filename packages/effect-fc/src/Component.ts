@@ -1,8 +1,7 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Utils } from "effect"
+import { Context, type Duration, Effect, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, identity, Layer, ManagedRuntime, Option, Pipeable, Predicate, Ref, Runtime, Scope, Tracer, type Utils } from "effect"
 import * as React from "react"
-import { Memoized } from "./index.js"
 
 
 export const TypeId: unique symbol = Symbol.for("@effect-fc/Component/Component")
@@ -16,10 +15,7 @@ export type TypeId = typeof TypeId
  * - a constructor-like object with component metadata and options
  */
 export interface Component<P extends {}, A extends React.ReactNode, E, R>
-extends
-    Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>,
-    Component.Options
-{
+extends ComponentPrototype<P, A, R>, ComponentOptions {
     new(_: never): Record<string, never>
     readonly [TypeId]: TypeId
     readonly "~Props": P
@@ -28,11 +24,6 @@ extends
     readonly "~Context": R
 
     readonly body: (props: P) => Effect.Effect<A, E, R>
-
-    /** @internal */
-    makeFunctionComponent(
-        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
-    ): (props: P) => A
 }
 
 export declare namespace Component {
@@ -42,56 +33,29 @@ export declare namespace Component {
     export type Context<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer _A, infer _E, infer R>] ? R : never
 
     export type AsComponent<T extends Component<any, any, any, any>> = Component<Props<T>, Success<T>, Error<T>, Context<T>>
-
-    /**
-     * Options that can be set on the component
-     */
-    export interface Options {
-        /** Custom displayName for React DevTools and debugging. */
-        readonly displayName?: string
-
-        /**
-         * Strategy used when executing finalizers on unmount/scope close.
-         * @default ExecutionStrategy.sequential
-         */
-        readonly finalizerExecutionStrategy: ExecutionStrategy.ExecutionStrategy
-
-        /**
-         * Debounce time before executing finalizers after component unmount.
-         * Helps avoid unnecessary work during fast remount/remount cycles.
-         * @default "100 millis"
-         */
-        readonly finalizerExecutionDebounce: Duration.DurationInput
-    }
 }
 
 
-const ComponentProto = Object.freeze({
-    ...Effectable.CommitPrototype,
+export interface ComponentPrototype<P extends {}, A extends React.ReactNode, R>
+extends Pipeable.Pipeable {
+    readonly [TypeId]: TypeId
+    readonly use: Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>
+
+    asFunctionComponent(
+        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
+    ): (props: P) => A
+
+    setFunctionComponentName(f: React.FC<P>): void
+    transformFunctionComponent(f: React.FC<P>): React.FC<P>
+}
+
+export const ComponentPrototype: ComponentPrototype<any, any, any> = Object.freeze({
     [TypeId]: TypeId,
+    ...Pipeable.Prototype,
 
-    commit: Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
-        this: Component<P, A, E, R>
-    ) {
-        // biome-ignore lint/style/noNonNullAssertion: React ref initialization
-        const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
-        runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+    get use() { return use(this) },
 
-        return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
-            (_services: readonly any[]) => Effect.sync(() => {
-                const f: React.FC<P> = this.makeFunctionComponent(runtimeRef)
-                f.displayName = this.displayName ?? "Anonymous"
-                return Memoized.isMemoized(this)
-                    ? React.memo(f, this.propsAreEqual)
-                    : f
-            }),
-            Equivalence.array(Equivalence.strict()),
-        )))[0](Array.from(
-            Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
-        ))
-    }),
-
-    makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
+    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
         this: Component<P, A, E, R>,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
@@ -102,14 +66,62 @@ const ComponentProto = Object.freeze({
             )
         )
     },
+
+    setFunctionComponentName<P extends {}, A extends React.ReactNode, E, R>(
+        this: Component<P, A, E, R>,
+        f: React.FC<P>,
+    ) {
+        f.displayName = this.displayName ?? "Anonymous"
+    },
+
+    transformFunctionComponent: identity,
 } as const)
 
-const defaultOptions: Component.Options = {
+const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
+    self: Component<P, A, E, R>
+) {
+    // biome-ignore lint/style/noNonNullAssertion: React ref initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
+    runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+
+    return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
+        (_services: readonly any[]) => Effect.sync(() => {
+            const f: React.FC<P> = self.asFunctionComponent(runtimeRef)
+            self.setFunctionComponentName(f)
+            return self.transformFunctionComponent(f)
+        }),
+        Equivalence.array(Equivalence.strict()),
+    )))[0](Array.from(
+        Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
+    ))
+})
+
+
+export interface ComponentOptions {
+    /** Custom displayName for React DevTools and debugging. */
+    readonly displayName?: string
+
+    /**
+     * Strategy used when executing finalizers on unmount/scope close.
+     * @default ExecutionStrategy.sequential
+     */
+    readonly finalizerExecutionStrategy: ExecutionStrategy.ExecutionStrategy
+
+    /**
+     * Debounce time before executing finalizers after component unmount.
+     * Helps avoid unnecessary work during fast remount/remount cycles.
+     * @default "100 millis"
+     */
+    readonly finalizerExecutionDebounce: Duration.DurationInput
+}
+
+export const defaultOptions: ComponentOptions = {
     finalizerExecutionStrategy: ExecutionStrategy.sequential,
     finalizerExecutionDebounce: "100 millis",
 }
 
-const nonReactiveTags = [Tracer.ParentSpan] as const
+
+export const nonReactiveTags = [Tracer.ParentSpan] as const
 
 
 export const isComponent = (u: unknown): u is Component<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, TypeId)
@@ -365,7 +377,7 @@ export const make: (
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fn(spanNameOrBody as any, ...pipeables),
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
     }
     else {
@@ -375,7 +387,7 @@ export const make: (
                 body: Effect.fn(spanNameOrBody, spanOptions)(body, ...pipeables as []),
                 displayName: spanNameOrBody,
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
     }
 }
@@ -401,14 +413,14 @@ export const makeUntraced: (
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fnUntraced(spanNameOrBody as any, ...pipeables as []),
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
         : (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fnUntraced(body, ...pipeables as []),
                 displayName: spanNameOrBody,
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
 )
 
@@ -417,15 +429,15 @@ export const makeUntraced: (
  */
 export const withOptions: {
     <T extends Component<any, any, any, any>>(
-        options: Partial<Component.Options>
+        options: Partial<ComponentOptions>
     ): (self: T) => T
     <T extends Component<any, any, any, any>>(
         self: T,
-        options: Partial<Component.Options>,
+        options: Partial<ComponentOptions>,
     ): T
 } = Function.dual(2, <T extends Component<any, any, any, any>>(
     self: T,
-    options: Partial<Component.Options>,
+    options: Partial<ComponentOptions>,
 ): T => Object.setPrototypeOf(
     Object.assign(function() {}, self, options),
     Object.getPrototypeOf(self),
@@ -477,7 +489,7 @@ export const withRuntime: {
     context: React.Context<Runtime.Runtime<R>>,
 ) => function WithRuntime(props: P) {
     return React.createElement(
-        Runtime.runSync(React.useContext(context))(self),
+        Runtime.runSync(React.useContext(context))(self.use),
         props,
     )
 })

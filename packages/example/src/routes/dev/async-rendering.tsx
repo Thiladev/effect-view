@@ -9,8 +9,8 @@ import { runtime } from "@/runtime"
 
 // Generator version
 const RouteComponent = Component.makeUntraced(function* AsyncRendering() {
-    const MemoizedAsyncComponentFC = yield* MemoizedAsyncComponent
-    const AsyncComponentFC = yield* AsyncComponent
+    const MemoizedAsyncComponentFC = yield* MemoizedAsyncComponent.use
+    const AsyncComponentFC = yield* AsyncComponent.use
     const [input, setInput] = React.useState("")
 
     return (
@@ -51,7 +51,7 @@ const RouteComponent = Component.makeUntraced(function* AsyncRendering() {
 
 
 class AsyncComponent extends Component.makeUntraced("AsyncComponent")(function*() {
-    const SubComponentFC = yield* SubComponent
+    const SubComponentFC = yield* SubComponent.use
 
     yield* Effect.sleep("500 millis") // Async operation
     // Cannot use React hooks after the async operation
