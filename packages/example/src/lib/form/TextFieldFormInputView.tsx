@@ -18,7 +18,7 @@ extends Omit<TextField.RootProps, "optional" | "defaultValue">, Form.useOptional
 export type TextFieldFormInputProps = Props | OptionalProps
 
 
-export class TextFieldFormInput extends Component.makeUntraced("TextFieldFormInput")(function*(props: TextFieldFormInputProps) {
+export class TextFieldFormInputView extends Component.make("TextFieldFormInput")(function*(props: TextFieldFormInputProps) {
     const input: (
         | { readonly optional: true } & Form.useOptionalInput.Success<string>
         | { readonly optional: false } & Form.useInput.Success<string>
