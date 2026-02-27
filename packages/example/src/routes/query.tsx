@@ -18,9 +18,10 @@ const ResultView = Component.make("ResultView")(function*() {
 
     const [idRef, query, mutation] = yield* Component.useOnMount(() => Effect.gen(function*() {
         const idRef = yield* SubscriptionRef.make(1)
+        const key = Stream.map(idRef.changes, id => [id] as const)
 
         const query = yield* Query.service({
-            key: Stream.map(idRef.changes, id => [id] as const),
+            key,
             f: ([id]) => HttpClient.HttpClient.pipe(
                 Effect.tap(Effect.sleep("500 millis")),
                 Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
