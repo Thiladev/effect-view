@@ -365,7 +365,7 @@ export declare namespace make {
  * - **Chained transformation functions**: Enables Effect.fn-style pipelines for composable transformations
  * - **Automatic tracing**: Optional tracing span creation with automatic `displayName` assignment
  *
- * When a `spanName` string is provided as the first argument, the following occurs automatically:
+ * When a `spanName` string is provided, the following occurs automatically:
  * 1. A distributed tracing span is created with the specified name
  * 2. The resulting React component receives `displayName = spanName` for DevTools visibility
  *
@@ -382,14 +382,23 @@ export declare namespace make {
  * class MyComponent extends Component.make("MyComponent")(function* (props: { count: number }) {
  *   const value = yield* someEffect
  *   return <div>{value}</div>
- * })
+ * }) {}
  * ```
  *
  * @example Without name
  * ```tsx
- * const MyComponent = Component.make((props: { count: number }) => {
- *   return Effect.sync(() => <div>{props.count}</div>)
- * })
+ * class MyComponent extends Component.make(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Using pipeline
+ * ```tsx
+ * class MyComponent extends Component.make("MyComponent")(
+ *   (props: { count: number }) => someEffect,
+ *   Effect.map(value => <div>{value}</div>),
+ * ) {}
  * ```
  */
 export const make: (
@@ -431,22 +440,39 @@ export const make: (
  * - To reduce tracing overhead in deeply nested component hierarchies
  * - To avoid span noise in performance-sensitive applications
  *
- * When a string is provided as the first argument, it is used **exclusively** as the React component's
+ * When a `spanName` string is provided, it is used **exclusively** as the React component's
  * `displayName` for DevTools identification. No tracing span is created.
  *
  * @example
  * ```tsx
- * const MyComponent = Component.makeUntraced(function* (props: { count: number }) {
+ * const MyComponent = Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
  *   const value = yield* someEffect
  *   return <div>{value}</div>
  * })
  * ```
  *
- * @example With displayName only
+ * @example As an opaque type using class syntax
  * ```tsx
- * const MyComponent = Component.makeUntraced("MyComponent", (props: { count: number }) => {
- *   return Effect.sync(() => <div>{props.count}</div>)
- * })
+ * class MyComponent extends Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Without name
+ * ```tsx
+ * class MyComponent extends Component.makeUntraced(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Using pipeline
+ * ```tsx
+ * class MyComponent extends Component.makeUntraced("MyComponent")(
+ *   (props: { count: number }) => someEffect,
+ *   Effect.map(value => <div>{value}</div>),
+ * ) {}
  * ```
  */
 export const makeUntraced: (
@@ -478,7 +504,6 @@ export const makeUntraced: (
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(...)
  * const MyComponentWithCustomOptions = MyComponent.pipe(
  *   Component.withOptions({
  *     finalizerExecutionStrategy: ExecutionStrategy.parallel,
@@ -507,17 +532,14 @@ export const withOptions: {
  * Wraps an Effect-FC Component and converts it into a standard React function component,
  * serving as an **entrypoint** into an Effect-FC component hierarchy.
  *
- * This is the recommended approach for integrating Effect-FC components with the broader React ecosystem,
+ * This is how Effect-FC components are integrated with the broader React ecosystem,
  * particularly when:
  * - Using client-side routers (TanStack Router, React Router, etc.)
  * - Implementing lazy-loaded or code-split routes
  * - Connecting to third-party libraries expecting standard React components
  * - Creating component boundaries between Effect-FC and non-Effect-FC code
  *
- * The Effect runtime is obtained from the provided React Context, enabling:
- * - Single-point dependency injection at the application root
- * - Consistent runtime environment across entire route trees or feature modules
- * - Proper resource lifecycle management across component hierarchies
+ * The Effect runtime is obtained from the provided React Context.
  *
  * @param self    - The Effect-FC Component to be rendered as a standard React component
  * @param context - React Context providing the Effect Runtime for this component tree.
@@ -669,8 +691,8 @@ export const useScope = Effect.fnUntraced(function*(
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
- *   const initialData = yield* useOnMount(() => fetchData)
+ * const MyComponent = Component.make(function*() {
+ *   const initialData = yield* Component.useOnMount(() => getData)
  *   return <div>{initialData}</div>
  * })
  * ```
@@ -707,8 +729,8 @@ export declare namespace useOnChange {
  * @example
  * ```tsx
  * const MyComponent = Component.make(function* (props: { userId: string }) {
- *   const userData = yield* useOnChange(
- *     fetchUser(props.userId),
+ *   const userData = yield* Component.useOnChange(
+ *     getUser(props.userId),
  *     [props.userId],
  *   )
  *   return <div>{userData.name}</div>
@@ -740,7 +762,7 @@ export declare namespace useReactEffect {
  * Effect hook that provides Effect-based semantics for React.useEffect.
  *
  * This hook bridges React's useEffect with the Effect system, allowing you to use Effects
- * for side effects while maintaining React's dependency tracking and lifecycle semantics.
+ * for React side effects while maintaining React's dependency tracking and lifecycle semantics.
  *
  * Unlike React.useEffect which uses imperative cleanup functions, this hook leverages the
  * Effect Scope API for resource management. Cleanup logic is expressed declaratively through
@@ -756,14 +778,15 @@ export declare namespace useReactEffect {
  * @example
  * ```tsx
  * const MyComponent = Component.make(function* (props: { id: string }) {
- *   yield* useReactEffect(
- *     () => {
- *       const subscription = subscribe(props.id)
- *       return Effect.addFinalizer(() => subscription.unsubscribe())
- *     },
- *     [props.id]
+ *   yield* Component.useReactEffect(
+ *     () => getNotificationStreamForUser(props.id).pipe(
+ *       Stream.unwrap,
+ *       Stream.runForEach(notification => Console.log(`Notification received: ${ notification }`),
+ *       Effect.forkScoped,
+ *     ),
+ *     [props.id],
  *   )
- *   return <div>Subscribed to {props.id}</div>
+ *   return <div>Subscribed to notifications for {props.id}</div>
  * })
  * ```
  */
@@ -826,17 +849,17 @@ export declare namespace useReactLayoutEffect {
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
+ * const MyComponent = Component.make(function*() {
  *   const ref = React.useRef<HTMLDivElement>(null)
- *   yield* useReactLayoutEffect(
- *     () => {
- *       if (ref.current) {
- *         const height = ref.current.offsetHeight
- *         // Perform layout-dependent operations
+ *   yield* Component.useReactLayoutEffect(
+ *     () => Effect.gen(function* () {
+ *       const element = ref.current
+ *       if (element) {
+ *         const rect = element.getBoundingClientRect()
+ *         yield* Console.log(`Element dimensions: ${ rect.width }x${ rect.height }`)
  *       }
- *       return Effect.void
- *     },
- *     []
+ *     }),
+ *     [],
  *   )
  *   return <div ref={ref}>Content</div>
  * })
@@ -863,13 +886,11 @@ export const useReactLayoutEffect = Effect.fnUntraced(function* <E, R>(
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
- *   const runSync = yield* useRunSync()
- *   const handleClick = () => {
- *     const result = runSync(someEffect)
- *     console.log(result)
- *   }
- *   return <button onClick={handleClick}>Click me</button>
+ * const MyComponent = Component.make(function*() {
+ *   const runSync = yield* Component.useRunSync<SomeService>() // Specify required services
+ *   const runSync = yield* Component.useRunSync() // Or no service requirements
+ *
+ *   return <button onClick={() => runSync(someEffect)}>Click me</button>
  * })
  * ```
  */
@@ -890,17 +911,11 @@ export const useRunSync = <R = never>(): Effect.Effect<
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
- *   const runPromise = yield* useRunPromise()
- *   const handleClick = async () => {
- *     try {
- *       const result = await runPromise(someEffect)
- *       console.log(result)
- *     } catch (error) {
- *       console.error(error)
- *     }
- *   }
- *   return <button onClick={handleClick}>Click me</button>
+ * const MyComponent = Component.make(function*() {
+ *   const runPromise = yield* Component.useRunPromise<SomeService>() // Specify required services
+ *   const runPromise = yield* Component.useRunPromise() // Or no service requirements
+ *
+ *   return <button onClick={() => runPromise(someEffect)}>Click me</button>
  * })
  * ```
  */
@@ -929,10 +944,11 @@ export const useRunPromise = <R = never>(): Effect.Effect<
  * @example
  * ```tsx
  * const MyComponent = Component.make(function* (props: { onSave: (data: Data) => void }) {
- *   const handleSave = yield* useCallbackSync(
- *     (data: Data) => saveData(data),
- *     [props.onSave]
+ *   const handleSave = yield* Component.useCallbackSync(
+ *     (data: Data) => Effect.sync(() => props.onSave(data)),
+ *     [props.onSave],
  *   )
+ *
  *   return <button onClick={() => handleSave(myData)}>Save</button>
  * })
  * ```
@@ -968,21 +984,12 @@ export const useCallbackSync = Effect.fnUntraced(function* <Args extends unknown
  * @example
  * ```tsx
  * const MyComponent = Component.make(function* (props: { onSave: (data: Data) => void }) {
- *   const handleSave = yield* useCallbackPromise(
- *     (data: Data) => saveData(data),
- *     [props.onSave]
+ *   const handleSave = yield* Component.useCallbackPromise(
+ *     (data: Data) => Effect.promise(() => props.onSave(data)),
+ *     [props.onSave],
  *   )
- *   return (
- *     <button onClick={async () => {
- *       try {
- *         await handleSave(myData)
- *       } catch (error) {
- *         console.error(error)
- *       }
- *     }}>
- *       Save
- *     </button>
- *   )
+ *
+ *   return <button onClick={() => handleSave(myData)}>Save</button>
  * })
  * ```
  */
@@ -1024,32 +1031,49 @@ export declare namespace useContext {
  *
  * @example
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
- *   const context = yield* useContext(
- *     Layer.succeed(MyService, new MyServiceImpl())
+ * const MyLayer = Layer.succeed(MyService, new MyServiceImpl())
+ * const MyComponent = Component.make(function*() {
+ *   const context = yield* Component.useContext(MyLayer)
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
  *   )
- *   // Use context to access services
- *   return <div>Using services</div>
+ *
+ *   return <Sub />
+ * })
+ * ```
+ *
+ * @example With memoized layer
+ * ```tsx
+ * const MyComponent = Component.make(function*(props: { id: string })) {
+ *   const context = yield* Component.useContext(
+ *     React.useMemo(() => Layer.succeed(MyService, new MyServiceImpl(props.id)), [props.id])
+ *   )
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
+ *   )
+ *
+ *   return <Sub />
  * })
  * ```
  *
  * @example With async layer
  * ```tsx
- * const MyComponent = Component.make(function* (props) {
- *   const context = yield* useContext(
- *     Layer.effect(MyService, () => fetchServiceConfig())
+ * const MyAsyncLayer = Layer.effect(MyService, someAsyncEffect)
+ * const MyComponent = Component.make(function*() {
+ *   const context = yield* Component.useContext(MyAsyncLayer)
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
  *   )
- *   return <div>Using async services</div>
- * })
  *
- * // Must be wrapped with Async.async
- * export default Async.async(MyComponent)
- * ```
+ *   return <Sub />
+ * }).pipe(
+ *   Async.async // Required to handle async layer effects
+ * )
  */
 export const useContext = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: useContext.Options,
-): Effect.Effect<Context.Context<ROut>, E, Exclude<RIn, Scope.Scope>> => useOnChange(() => Effect.context<RIn>().pipe(
+): Effect.Effect<Context.Context<ROut>, E, RIn | Scope.Scope> => useOnChange(() => Effect.context<RIn>().pipe(
     Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
     Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
     Effect.andThen(runtime => runtime.runtimeEffect),
