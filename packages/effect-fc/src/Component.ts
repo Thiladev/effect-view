@@ -1033,7 +1033,7 @@ export declare namespace useContext {
  * ```tsx
  * const MyLayer = Layer.succeed(MyService, new MyServiceImpl())
  * const MyComponent = Component.make(function*() {
- *   const context = yield* Component.useContext(MyLayer)
+ *   const context = yield* Component.useContextFromLayer(MyLayer)
  *   const Sub = yield* SubComponent.use.pipe(
  *     Effect.provide(context)
  *   )
@@ -1045,7 +1045,7 @@ export declare namespace useContext {
  * @example With memoized layer
  * ```tsx
  * const MyComponent = Component.make(function*(props: { id: string })) {
- *   const context = yield* Component.useContext(
+ *   const context = yield* Component.useContextFromLayer(
  *     React.useMemo(() => Layer.succeed(MyService, new MyServiceImpl(props.id)), [props.id])
  *   )
  *   const Sub = yield* SubComponent.use.pipe(
@@ -1060,7 +1060,7 @@ export declare namespace useContext {
  * ```tsx
  * const MyAsyncLayer = Layer.effect(MyService, someAsyncEffect)
  * const MyComponent = Component.make(function*() {
- *   const context = yield* Component.useContext(MyAsyncLayer)
+ *   const context = yield* Component.useContextFromLayer(MyAsyncLayer)
  *   const Sub = yield* SubComponent.use.pipe(
  *     Effect.provide(context)
  *   )
@@ -1070,7 +1070,7 @@ export declare namespace useContext {
  *   Async.async // Required to handle async layer effects
  * )
  */
-export const useContext = <ROut, E, RIn>(
+export const useContextFromLayer = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: useContext.Options,
 ): Effect.Effect<Context.Context<ROut>, E, RIn | Scope.Scope> => useOnChange(() => Effect.context<RIn>().pipe(
