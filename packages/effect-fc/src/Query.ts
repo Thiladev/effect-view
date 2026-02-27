@@ -11,7 +11,7 @@ extends Pipeable.Pipeable {
     readonly [QueryTypeId]: QueryTypeId
 
     readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | R>
-    readonly key: Stream.Stream<K, never, never>
+    readonly key: Stream.Stream<K>
     readonly f: (key: K) => Effect.Effect<A, E, R>
     readonly initialProgress: P
 
