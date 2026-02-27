@@ -118,7 +118,7 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
 const RegisterPage = Component.makeUntraced("RegisterPage")(function*() {
     const RegisterFormViewFC = yield* Effect.provide(
         RegisterFormView.use,
-        yield* Component.useContext(RegisterForm.Default),
+        yield* Component.useContextFromLayer(RegisterForm.Default),
     )
 
     return <RegisterFormViewFC />

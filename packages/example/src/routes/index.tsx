@@ -11,7 +11,7 @@ const TodosStateLive = TodosState.Default("todos")
 const Index = Component.makeUntraced("Index")(function*() {
     const TodosFC = yield* Effect.provide(
         Todos.use,
-        yield* Component.useContext(TodosStateLive),
+        yield* Component.useContextFromLayer(TodosStateLive),
     )
 
     return <TodosFC />
