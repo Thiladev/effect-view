@@ -6,28 +6,27 @@ import * as Result from "./Result.js"
 export const QueryTypeId: unique symbol = Symbol.for("@effect-fc/Query/Query")
 export type QueryTypeId = typeof QueryTypeId
 
-export interface Query<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never, in out P = never>
+export interface Query<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never>
 extends Pipeable.Pipeable {
     readonly [QueryTypeId]: QueryTypeId
 
     readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | R>
     readonly key: Stream.Stream<K, KE, KR>
     readonly f: (key: K) => Effect.Effect<A, E, R>
-    readonly initialProgress: P
 
     readonly staleTime: Duration.DurationInput
     readonly refreshOnWindowFocus: boolean
 
     readonly latestKey: Subscribable.Subscribable<Option.Option<K>>
     readonly fiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, E>>>
-    readonly result: Subscribable.Subscribable<Result.Result<A, E, P>>
-    readonly latestFinalResult: Subscribable.Subscribable<Option.Option<Result.Final<A, E, P>>>
+    readonly result: Subscribable.Subscribable<Result.Result<A, E>>
+    readonly latestFinalResult: Subscribable.Subscribable<Option.Option<Result.Success<A, E> | Result.Failure<A, E>>>
 
     readonly run: Effect.Effect<void>
-    fetch(key: K): Effect.Effect<Result.Final<A, E, P>>
-    fetchSubscribable(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>>
-    readonly refresh: Effect.Effect<Result.Final<A, E, P>, Cause.NoSuchElementException>
-    readonly refreshSubscribable: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E, P>>, Cause.NoSuchElementException>
+    fetch(key: K): Effect.Effect<Result.Success<A, E> | Result.Failure<A, E>>
+    fetchSubscribable(key: K): Effect.Effect<Subscribable.Subscribable<Result.Result<A, E>>>
+    readonly refresh: Effect.Effect<Result.Success<A, E> | Result.Failure<A, E>, Cause.NoSuchElementException>
+    readonly refreshSubscribable: Effect.Effect<Subscribable.Subscribable<Result.Result<A, E>>, Cause.NoSuchElementException>
 
     readonly invalidateCache: Effect.Effect<void>
     invalidateCacheEntry(key: K): Effect.Effect<void>
@@ -37,23 +36,22 @@ export declare namespace Query {
     export type AnyKey = readonly any[]
 }
 
-export class QueryImpl<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never, in out P = never>
-extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
+export class QueryImpl<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never>
+extends Pipeable.Class() implements Query<K, A, KE, KR, E, R> {
     readonly [QueryTypeId]: QueryTypeId = QueryTypeId
 
     constructor(
         readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | KR | R>,
         readonly key: Stream.Stream<K, KE, KR>,
         readonly f: (key: K) => Effect.Effect<A, E, R>,
-        readonly initialProgress: P,
 
         readonly staleTime: Duration.DurationInput,
         readonly refreshOnWindowFocus: boolean,
 
         readonly latestKey: SubscriptionRef.SubscriptionRef<Option.Option<K>>,
         readonly fiber: SubscriptionRef.SubscriptionRef<Option.Option<Fiber.Fiber<A, E>>>,
-        readonly result: SubscriptionRef.SubscriptionRef<Result.Result<A, E, P>>,
-        readonly latestFinalResult: SubscriptionRef.SubscriptionRef<Option.Option<Result.Final<A, E, P>>>,
+        readonly result: SubscriptionRef.SubscriptionRef<Result.Success<A, E> | Result.Failure<A, E>>,
+        readonly latestFinalResult: SubscriptionRef.SubscriptionRef<Option.Option<Result.Success<A, E> | Result.Failure<A, E>>>,
 
         readonly runSemaphore: Effect.Semaphore,
     ) {
@@ -88,7 +86,7 @@ extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
         }))
     }
 
-    fetch(key: K): Effect.Effect<Result.Final<A, E, P>> {
+    fetch(key: K): Effect.Effect<Result.Success<A, E> | Result.Failure<A, E>> {
         return this.interrupt.pipe(
             Effect.andThen(SubscriptionRef.set(this.latestKey, Option.some(key))),
             Effect.andThen(this.latestFinalResult),
@@ -152,7 +150,7 @@ extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
 
     startCached(
         key: K,
-        initial: Result.Initial | Result.Final<A, E, P>,
+        previous: Result.Success<A, E> | Result.Failure<A, E>,
     ): Effect.Effect<
         Subscribable.Subscribable<Result.Result<A, E, P>>,
         never,
@@ -174,31 +172,46 @@ extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
 
     start(
         key: K,
-        initial: Result.Initial | Result.Final<A, E, P>,
+        previous: Result.Success<A, E> | Result.Failure<A, E>,
     ): Effect.Effect<
-        Subscribable.Subscribable<Result.Result<A, E, P>>,
+        Subscribable.Subscribable<Result.Result<A, E>>,
         never,
         Scope.Scope | R
     > {
-        return Result.unsafeForkEffect(
-            Effect.onExit(this.f(key), () => Effect.andThen(
-                Effect.all([Effect.fiberId, this.fiber]),
-                ([currentFiberId, fiber]) => Option.match(fiber, {
-                    onSome: v => Equal.equals(currentFiberId, v.id())
-                        ? SubscriptionRef.set(this.fiber, Option.none())
-                        : Effect.void,
-                    onNone: () => Effect.void,
-                }),
-            )),
+        return Effect.Do.pipe(
+            Effect.bind("ref", () => SubscriptionRef.make<Result.Result<A, E>>(Result.initial())),
 
-            {
-                initial,
-                initialProgress: this.initialProgress,
-            } as Result.unsafeForkEffect.Options<A, E, P>,
-        ).pipe(
-            Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
-            Effect.map(([sub]) => sub),
         )
+
+        Effect.onExit(this.f(key), () => Effect.andThen(
+            Effect.all([Effect.fiberId, this.fiber]),
+            ([currentFiberId, fiber]) => Option.match(fiber, {
+                onSome: v => Equal.equals(currentFiberId, v.id())
+                    ? SubscriptionRef.set(this.fiber, Option.none())
+                    : Effect.void,
+                onNone: () => Effect.void,
+            }),
+        ))
+
+        // return Result.unsafeForkEffect(
+        //     Effect.onExit(this.f(key), () => Effect.andThen(
+        //         Effect.all([Effect.fiberId, this.fiber]),
+        //         ([currentFiberId, fiber]) => Option.match(fiber, {
+        //             onSome: v => Equal.equals(currentFiberId, v.id())
+        //                 ? SubscriptionRef.set(this.fiber, Option.none())
+        //                 : Effect.void,
+        //             onNone: () => Effect.void,
+        //         }),
+        //     )),
+
+        //     {
+        //         initial,
+        //         initialProgress: this.initialProgress,
+        //     } as Result.unsafeForkEffect.Options<A, E, P>,
+        // ).pipe(
+        //     Effect.tap(([, fiber]) => SubscriptionRef.set(this.fiber, Option.some(fiber))),
+        //     Effect.map(([sub]) => sub),
+        // )
     }
 
     watch(
