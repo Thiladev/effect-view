@@ -17,8 +17,8 @@ const RouteComponent = Component.makeUntraced("RouteComponent")(function*() {
                 onChange={e => setValue(e.target.value)}
             />
 
-            {yield* Effect.map(SubComponent, FC => <FC />)}
-            {yield* Effect.map(MemoizedSubComponent, FC => <FC />)}
+            {yield* Effect.map(SubComponent.use, FC => <FC />)}
+            {yield* Effect.map(MemoizedSubComponent.use, FC => <FC />)}
         </Flex>
     )
 }).pipe(

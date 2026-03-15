@@ -13,10 +13,10 @@ import { Route as ResultRouteImport } from './routes/result'
 import { Route as QueryRouteImport } from './routes/query'
 import { Route as FormRouteImport } from './routes/form'
 import { Route as BlankRouteImport } from './routes/blank'
+import { Route as AsyncRouteImport } from './routes/async'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DevMemoRouteImport } from './routes/dev/memo'
 import { Route as DevContextRouteImport } from './routes/dev/context'
-import { Route as DevAsyncRenderingRouteImport } from './routes/dev/async-rendering'
 
 const ResultRoute = ResultRouteImport.update({
   id: '/result',
@@ -38,6 +38,11 @@ const BlankRoute = BlankRouteImport.update({
   path: '/blank',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AsyncRoute = AsyncRouteImport.update({
+  id: '/async',
+  path: '/async',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -53,40 +58,35 @@ const DevContextRoute = DevContextRouteImport.update({
   path: '/dev/context',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DevAsyncRenderingRoute = DevAsyncRenderingRouteImport.update({
-  id: '/dev/async-rendering',
-  path: '/dev/async-rendering',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/query': typeof QueryRoute
   '/result': typeof ResultRoute
-  '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/query': typeof QueryRoute
   '/result': typeof ResultRoute
-  '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
   '/query': typeof QueryRoute
   '/result': typeof ResultRoute
-  '/dev/async-rendering': typeof DevAsyncRenderingRoute
   '/dev/context': typeof DevContextRoute
   '/dev/memo': typeof DevMemoRoute
 }
@@ -94,42 +94,42 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/async'
     | '/blank'
     | '/form'
     | '/query'
     | '/result'
-    | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/async'
     | '/blank'
     | '/form'
     | '/query'
     | '/result'
-    | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
   id:
     | '__root__'
     | '/'
+    | '/async'
     | '/blank'
     | '/form'
     | '/query'
     | '/result'
-    | '/dev/async-rendering'
     | '/dev/context'
     | '/dev/memo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AsyncRoute: typeof AsyncRoute
   BlankRoute: typeof BlankRoute
   FormRoute: typeof FormRoute
   QueryRoute: typeof QueryRoute
   ResultRoute: typeof ResultRoute
-  DevAsyncRenderingRoute: typeof DevAsyncRenderingRoute
   DevContextRoute: typeof DevContextRoute
   DevMemoRoute: typeof DevMemoRoute
 }
@@ -164,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BlankRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/async': {
+      id: '/async'
+      path: '/async'
+      fullPath: '/async'
+      preLoaderRoute: typeof AsyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -185,23 +192,16 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevContextRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dev/async-rendering': {
-      id: '/dev/async-rendering'
-      path: '/dev/async-rendering'
-      fullPath: '/dev/async-rendering'
-      preLoaderRoute: typeof DevAsyncRenderingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AsyncRoute: AsyncRoute,
   BlankRoute: BlankRoute,
   FormRoute: FormRoute,
   QueryRoute: QueryRoute,
   ResultRoute: ResultRoute,
-  DevAsyncRenderingRoute: DevAsyncRenderingRoute,
   DevContextRoute: DevContextRoute,
   DevMemoRoute: DevMemoRoute,
 }

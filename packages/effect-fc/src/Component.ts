@@ -1,38 +1,25 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Effectable, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, Layer, ManagedRuntime, Option, Predicate, Ref, Runtime, Scope, Tracer, type Utils } from "effect"
+import { Context, type Duration, Effect, Equivalence, ExecutionStrategy, Exit, Fiber, Function, HashMap, identity, Layer, ManagedRuntime, Option, Pipeable, Predicate, Ref, Runtime, Scope, Tracer, type Utils } from "effect"
 import * as React from "react"
-import { Memoized } from "./index.js"
 
 
-export const TypeId: unique symbol = Symbol.for("@effect-fc/Component/Component")
-export type TypeId = typeof TypeId
+export const ComponentTypeId: unique symbol = Symbol.for("@effect-fc/Component/Component")
+export type ComponentTypeId = typeof ComponentTypeId
 
 /**
- * Interface representing an Effect-based React Component.
- *
- * This is both:
- * - an Effect that produces a React function component
- * - a constructor-like object with component metadata and options
+ * Represents an Effect-based React Component that integrates the Effect system with React.
  */
 export interface Component<P extends {}, A extends React.ReactNode, E, R>
-extends
-    Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>,
-    Component.Options
-{
+extends ComponentPrototype<P, A, R>, ComponentOptions {
     new(_: never): Record<string, never>
-    readonly [TypeId]: TypeId
+    readonly [ComponentTypeId]: ComponentTypeId
     readonly "~Props": P
     readonly "~Success": A
     readonly "~Error": E
     readonly "~Context": R
 
     readonly body: (props: P) => Effect.Effect<A, E, R>
-
-    /** @internal */
-    makeFunctionComponent(
-        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
-    ): (props: P) => A
 }
 
 export declare namespace Component {
@@ -42,56 +29,29 @@ export declare namespace Component {
     export type Context<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer _A, infer _E, infer R>] ? R : never
 
     export type AsComponent<T extends Component<any, any, any, any>> = Component<Props<T>, Success<T>, Error<T>, Context<T>>
-
-    /**
-     * Options that can be set on the component
-     */
-    export interface Options {
-        /** Custom displayName for React DevTools and debugging. */
-        readonly displayName?: string
-
-        /**
-         * Strategy used when executing finalizers on unmount/scope close.
-         * @default ExecutionStrategy.sequential
-         */
-        readonly finalizerExecutionStrategy: ExecutionStrategy.ExecutionStrategy
-
-        /**
-         * Debounce time before executing finalizers after component unmount.
-         * Helps avoid unnecessary work during fast remount/remount cycles.
-         * @default "100 millis"
-         */
-        readonly finalizerExecutionDebounce: Duration.DurationInput
-    }
 }
 
 
-const ComponentProto = Object.freeze({
-    ...Effectable.CommitPrototype,
-    [TypeId]: TypeId,
+export interface ComponentPrototype<P extends {}, A extends React.ReactNode, R>
+extends Pipeable.Pipeable {
+    readonly [ComponentTypeId]: ComponentTypeId
+    readonly use: Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>
 
-    commit: Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
-        this: Component<P, A, E, R>
-    ) {
-        // biome-ignore lint/style/noNonNullAssertion: React ref initialization
-        const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
-        runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+    asFunctionComponent(
+        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
+    ): (props: P) => A
 
-        return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
-            (_services: readonly any[]) => Effect.sync(() => {
-                const f: React.FC<P> = this.makeFunctionComponent(runtimeRef)
-                f.displayName = this.displayName ?? "Anonymous"
-                return Memoized.isMemoized(this)
-                    ? React.memo(f, this.propsAreEqual)
-                    : f
-            }),
-            Equivalence.array(Equivalence.strict()),
-        )))[0](Array.from(
-            Context.omit(...nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
-        ))
-    }),
+    setFunctionComponentName(f: React.FC<P>): void
+    transformFunctionComponent(f: React.FC<P>): React.FC<P>
+}
 
-    makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
+export const ComponentPrototype: ComponentPrototype<any, any, any> = Object.freeze({
+    [ComponentTypeId]: ComponentTypeId,
+    ...Pipeable.Prototype,
+
+    get use() { return use(this) },
+
+    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
         this: Component<P, A, E, R>,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
@@ -102,17 +62,76 @@ const ComponentProto = Object.freeze({
             )
         )
     },
+
+    setFunctionComponentName<P extends {}, A extends React.ReactNode, E, R>(
+        this: Component<P, A, E, R>,
+        f: React.FC<P>,
+    ) {
+        f.displayName = this.displayName ?? "Anonymous"
+    },
+
+    transformFunctionComponent: identity,
 } as const)
 
-const defaultOptions: Component.Options = {
+const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
+    self: Component<P, A, E, R>
+) {
+    // biome-ignore lint/style/noNonNullAssertion: React ref initialization
+    const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
+    runtimeRef.current = yield* Effect.runtime<Exclude<R, Scope.Scope>>()
+
+    return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
+        (_services: readonly any[]) => Effect.sync(() => {
+            const f: React.FC<P> = self.asFunctionComponent(runtimeRef)
+            self.setFunctionComponentName(f)
+            return self.transformFunctionComponent(f)
+        }),
+        Equivalence.array(Equivalence.strict()),
+    )))[0](Array.from(
+        Context.omit(...self.nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
+    ))
+})
+
+
+export interface ComponentOptions {
+    /**
+     * Custom display name for the component in React DevTools and debugging utilities.
+     */
+    readonly displayName?: string
+
+    /**
+     * Context tags that should not trigger component remount when their values change.
+     *
+     * @default [Tracer.ParentSpan]
+     */
+    readonly nonReactiveTags: readonly Context.Tag<any, any>[]
+
+    /**
+     * Specifies the execution strategy for finalizers when the component unmounts or its scope closes.
+     * Determines whether finalizers execute sequentially or in parallel.
+     *
+     * @default ExecutionStrategy.sequential
+     */
+    readonly finalizerExecutionStrategy: ExecutionStrategy.ExecutionStrategy
+
+    /**
+     * Debounce duration before executing finalizers after component unmount.
+     * Prevents unnecessary cleanup work during rapid remount/unmount cycles,
+     * which is common in development and certain UI patterns.
+     *
+     * @default "100 millis"
+     */
+    readonly finalizerExecutionDebounce: Duration.DurationInput
+}
+
+export const defaultOptions: ComponentOptions = {
+    nonReactiveTags: [Tracer.ParentSpan],
     finalizerExecutionStrategy: ExecutionStrategy.sequential,
     finalizerExecutionDebounce: "100 millis",
 }
 
-const nonReactiveTags = [Tracer.ParentSpan] as const
 
-
-export const isComponent = (u: unknown): u is Component<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, TypeId)
+export const isComponent = (u: unknown): u is Component<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, ComponentTypeId)
 
 export declare namespace make {
     export type Gen = {
@@ -340,17 +359,51 @@ export declare namespace make {
 }
 
 /**
- * Creates an Effect-FC Component following the same overloads and pipeline style as `Effect.fn`.
+ * Creates an Effect-FC Component using the same overloads and pipeline composition style as `Effect.fn`.
  *
- * This is the **recommended** way to define components. It supports:
- * - Generator syntax (yield* style) — most ergonomic and readable
- * - Direct Effect return (non-generator)
- * - Chained transformation functions (like Effect.fn pipelines)
- * - Optional tracing span with automatic `displayName`
+ * This is the **recommended** approach for defining Effect-FC components. It provides comprehensive
+ * support for multiple component definition patterns:
  *
- * When you provide a `spanName` as the first argument, two things happen automatically:
- * 1. A tracing span is created with that name (unless using `makeUntraced`)
- * 2. The resulting React component gets `displayName = spanName`
+ * - **Generator syntax** (yield* style): Most ergonomic and readable approach for sequential operations
+ * - **Direct Effect return**: For simple components that return an Effect directly
+ * - **Chained transformation functions**: Enables Effect.fn-style pipelines for composable transformations
+ * - **Automatic tracing**: Optional tracing span creation with automatic `displayName` assignment
+ *
+ * When a `spanName` string is provided, the following occurs automatically:
+ * 1. A distributed tracing span is created with the specified name
+ * 2. The resulting React component receives `displayName = spanName` for DevTools visibility
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * })
+ * ```
+ *
+ * @example As an opaque type using class syntax
+ * ```tsx
+ * class MyComponent extends Component.make("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Without name
+ * ```tsx
+ * class MyComponent extends Component.make(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Using pipeline
+ * ```tsx
+ * class MyComponent extends Component.make("MyComponent")(
+ *   (props: { count: number }) => someEffect,
+ *   Effect.map(value => <div>{value}</div>),
+ * ) {}
+ * ```
  */
 export const make: (
     & make.Gen
@@ -365,7 +418,7 @@ export const make: (
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fn(spanNameOrBody as any, ...pipeables),
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
     }
     else {
@@ -375,21 +428,56 @@ export const make: (
                 body: Effect.fn(spanNameOrBody, spanOptions)(body, ...pipeables as []),
                 displayName: spanNameOrBody,
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
     }
 }
 
 /**
- * Same as `make`, but creates an **untraced** version — no automatic tracing span is created.
+ * Creates an Effect-FC Component without automatic distributed tracing.
  *
- * Follows the exact same API shape as `Effect.fnUntraced`.
- * Useful for:
- * - Components where you want full manual control over tracing
- * - Avoiding span noise in deeply nested UI
+ * This function provides the same API surface as `make`, but does not create automatic tracing spans.
+ * It follows the exact same overload structure as `Effect.fnUntraced`.
  *
- * When a string is provided as first argument, it is **only** used as the React component's `displayName`
- * (no tracing span is created).
+ * Use this variant when you need:
+ * - Full manual control over tracing instrumentation
+ * - To reduce tracing overhead in deeply nested component hierarchies
+ * - To avoid span noise in performance-sensitive applications
+ *
+ * When a `spanName` string is provided, it is used **exclusively** as the React component's
+ * `displayName` for DevTools identification. No tracing span is created.
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * })
+ * ```
+ *
+ * @example As an opaque type using class syntax
+ * ```tsx
+ * class MyComponent extends Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Without name
+ * ```tsx
+ * class MyComponent extends Component.makeUntraced(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Using pipeline
+ * ```tsx
+ * class MyComponent extends Component.makeUntraced("MyComponent")(
+ *   (props: { count: number }) => someEffect,
+ *   Effect.map(value => <div>{value}</div>),
+ * ) {}
+ * ```
  */
 export const makeUntraced: (
     & make.Gen
@@ -401,52 +489,71 @@ export const makeUntraced: (
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fnUntraced(spanNameOrBody as any, ...pipeables as []),
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
         : (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
             Object.assign(function() {}, defaultOptions, {
                 body: Effect.fnUntraced(body, ...pipeables as []),
                 displayName: spanNameOrBody,
             }),
-            ComponentProto,
+            ComponentPrototype,
         )
 )
 
 /**
- * Creates a new component with modified options while preserving original behavior.
+ * Creates a new component with modified configuration options while preserving all original behavior.
+ *
+ * This function allows you to customize component-level options such as finalizer execution strategy
+ * and debounce timing.
+ *
+ * @example
+ * ```tsx
+ * const MyComponentWithCustomOptions = MyComponent.pipe(
+ *   Component.withOptions({
+ *     finalizerExecutionStrategy: ExecutionStrategy.parallel,
+ *     finalizerExecutionDebounce: "50 millis",
+ *   })
+ * )
+ * ```
  */
 export const withOptions: {
     <T extends Component<any, any, any, any>>(
-        options: Partial<Component.Options>
+        options: Partial<ComponentOptions>
     ): (self: T) => T
     <T extends Component<any, any, any, any>>(
         self: T,
-        options: Partial<Component.Options>,
+        options: Partial<ComponentOptions>,
     ): T
 } = Function.dual(2, <T extends Component<any, any, any, any>>(
     self: T,
-    options: Partial<Component.Options>,
+    options: Partial<ComponentOptions>,
 ): T => Object.setPrototypeOf(
     Object.assign(function() {}, self, options),
     Object.getPrototypeOf(self),
 ))
 
 /**
- * Wraps an Effect-FC `Component` and turns it into a regular React function component
- * that serves as an **entrypoint** into an Effect-FC component hierarchy.
+ * Wraps an Effect-FC Component and converts it into a standard React function component,
+ * serving as an **entrypoint** into an Effect-FC component hierarchy.
  *
- * This is the recommended way to connect Effect-FC components to the rest of your React app,
- * especially when using routers (TanStack Router, React Router, etc.), lazy-loaded routes,
- * or any place where a standard React component is expected.
+ * This is how Effect-FC components are integrated with the broader React ecosystem,
+ * particularly when:
+ * - Using client-side routers (TanStack Router, React Router, etc.)
+ * - Implementing lazy-loaded or code-split routes
+ * - Connecting to third-party libraries expecting standard React components
+ * - Creating component boundaries between Effect-FC and non-Effect-FC code
  *
- * The runtime is obtained from the provided React Context, allowing you to:
- * - Provide dependencies once at a high level
- * - Use the same runtime across an entire route tree or feature
+ * The Effect runtime is obtained from the provided React Context.
  *
- * @example Using TanStack Router
+ * @param self    - The Effect-FC Component to be rendered as a standard React component
+ * @param context - React Context providing the Effect Runtime for this component tree.
+ *                  Create this using the `ReactRuntime` module.
+ *
+ * @example Integration with TanStack Router
  * ```tsx
- * // Main
+ * // Application root
  * export const runtime = ReactRuntime.make(Layer.empty)
+ *
  * function App() {
  *   return (
  *     <ReactRuntime.Provider runtime={runtime}>
@@ -455,14 +562,12 @@ export const withOptions: {
  *   )
  * }
  *
- * // Route
+ * // Route definition
  * export const Route = createFileRoute("/")({
  *   component: Component.withRuntime(HomePage, runtime.context)
  * })
  * ```
  *
- * @param self    - The Effect-FC Component you want to render as a regular React component.
- * @param context - React Context that holds the Runtime to use for this component tree. See the `ReactRuntime` module to create one.
  */
 export const withRuntime: {
     <P extends {}, A extends React.ReactNode, E, R>(
@@ -477,15 +582,17 @@ export const withRuntime: {
     context: React.Context<Runtime.Runtime<R>>,
 ) => function WithRuntime(props: P) {
     return React.createElement(
-        Runtime.runSync(React.useContext(context))(self),
+        Runtime.runSync(React.useContext(context))(self.use),
         props,
     )
 })
 
 
 /**
- * Service that keeps track of scopes associated with React components
- * (used internally by the `useScope` hook).
+ * Internal Effect service that maintains a registry of scopes associated with React component instances.
+ *
+ * This service is used internally by the `useScope` hook to manage the lifecycle of component scopes,
+ * including tracking active scopes and coordinating their cleanup when components unmount or dependencies change.
  */
 export class ScopeMap extends Effect.Service<ScopeMap>()("@effect-fc/Component/ScopeMap", {
     effect: Effect.bind(Effect.Do, "ref", () => Ref.make(HashMap.empty<object, ScopeMap.Entry>()))
@@ -507,13 +614,22 @@ export declare namespace useScope {
 }
 
 /**
- * Hook that creates and manages a `Scope` for the current component instance.
+ * Effect hook that creates and manages a `Scope` for the current component instance.
  *
- * Automatically closes the scope whenever `deps` changes or the component unmounts.
+ * This hook establishes a new scope that is automatically closed when:
+ * - The component unmounts
+ * - The dependency array `deps` changes
  *
- * @param deps - dependency array like in `React.useEffect`
- * @param options - finalizer execution control
- */
+ * The scope provides a resource management boundary for any Effects executed within the component,
+ * ensuring proper cleanup of resources and execution of finalizers.
+ *
+ * @param deps     - Dependency array following React.useEffect semantics. The scope is recreated
+ *                   whenever any dependency changes.
+ * @param options  - Configuration for finalizer execution behavior, including execution strategy
+ *                   and debounce timing.
+ *
+ * @returns An Effect that produces a `Scope` for resource management
+*/
 export const useScope = Effect.fnUntraced(function*(
     deps: React.DependencyList,
     options?: useScope.Options,
@@ -567,7 +683,23 @@ export const useScope = Effect.fnUntraced(function*(
 })
 
 /**
- * Runs an effect and returns its result only once on component mount.
+ * Effect hook that executes an Effect once when the component mounts and caches the result.
+ *
+ * This hook is useful for one-time initialization logic that should not be re-executed
+ * when the component re-renders. The Effect is executed exactly once during the component's
+ * initial mount, and the cached result is returned on all subsequent renders.
+ *
+ * @param f - A function that returns the Effect to execute on mount
+ *
+ * @returns An Effect that produces the cached result of the Effect
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function*() {
+ *   const initialData = yield* Component.useOnMount(() => getData)
+ *   return <div>{initialData}</div>
+ * })
+ * ```
  */
 export const useOnMount = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>
@@ -581,9 +713,33 @@ export declare namespace useOnChange {
 }
 
 /**
- * Runs an effect and returns its result whenever dependencies change.
+ * Effect hook that executes an Effect whenever dependencies change and caches the result.
  *
- * Provides its own `Scope` which closes whenever `deps` changes or the component unmounts.
+ * This hook combines the dependency-tracking behavior of React.useEffect with Effect caching.
+ * The Effect is re-executed whenever any dependency in the `deps` array changes, and the result
+ * is cached until the next dependency change.
+ *
+ * A dedicated scope is created for each dependency change, ensuring proper resource cleanup:
+ * - The scope closes when dependencies change
+ * - The scope closes when the component unmounts
+ * - All finalizers are executed according to the configured execution strategy
+ *
+ * @param f       - A function that returns the Effect to execute
+ * @param deps    - Dependency array following React.useEffect semantics
+ * @param options - Configuration for scope and finalizer behavior
+ *
+ * @returns An Effect that produces the cached result of the Effect
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function* (props: { userId: string }) {
+ *   const userData = yield* Component.useOnChange(
+ *     getUser(props.userId),
+ *     [props.userId],
+ *   )
+ *   return <div>{userData.name}</div>
+ * })
+ * ```
  */
 export const useOnChange = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>,
@@ -607,9 +763,36 @@ export declare namespace useReactEffect {
 }
 
 /**
- * Like `React.useEffect` but accepts an effect.
+ * Effect hook that provides Effect-based semantics for React.useEffect.
  *
- * Cleanup logic is handled through the `Scope` API rather than using imperative cleanup.
+ * This hook bridges React's useEffect with the Effect system, allowing you to use Effects
+ * for React side effects while maintaining React's dependency tracking and lifecycle semantics.
+ *
+ * Unlike React.useEffect which uses imperative cleanup functions, this hook leverages the
+ * Effect Scope API for resource management. Cleanup logic is expressed declaratively through
+ * finalizers registered with the scope, providing better composability and error handling.
+ *
+ * @param f       - A function that returns an Effect to execute as a side effect
+ * @param deps    - Optional dependency array following React.useEffect semantics.
+ *                  If omitted, the effect runs after every render.
+ * @param options - Configuration for finalizer execution mode (sync or fork) and strategy
+ *
+ * @returns An Effect that produces void
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function* (props: { id: string }) {
+ *   yield* Component.useReactEffect(
+ *     () => getNotificationStreamForUser(props.id).pipe(
+ *       Stream.unwrap,
+ *       Stream.runForEach(notification => Console.log(`Notification received: ${ notification }`),
+ *       Effect.forkScoped,
+ *     ),
+ *     [props.id],
+ *   )
+ *   return <div>Subscribed to notifications for {props.id}</div>
+ * })
+ * ```
  */
 export const useReactEffect = Effect.fnUntraced(function* <E, R>(
     f: () => Effect.Effect<void, E, R>,
@@ -648,9 +831,43 @@ export declare namespace useReactLayoutEffect {
 }
 
 /**
- * Like `React.useReactLayoutEffect` but accepts an effect.
+ * Effect hook that provides Effect-based semantics for React.useLayoutEffect.
  *
- * Cleanup logic is handled through the `Scope` API rather than using imperative cleanup.
+ * This hook is identical to `useReactEffect` but executes synchronously after DOM mutations
+ * but before the browser paints, following React.useLayoutEffect semantics.
+ *
+ * Use this hook when you need to:
+ * - Measure DOM elements (e.g., for layout calculations)
+ * - Synchronously update state based on DOM measurements
+ * - Avoid visual flicker from asynchronous updates
+ *
+ * Like `useReactEffect`, cleanup logic is handled through the Effect Scope API rather than
+ * imperative cleanup functions, providing declarative and composable resource management.
+ *
+ * @param f       - A function that returns an Effect to execute as a layout side effect
+ * @param deps    - Optional dependency array following React.useLayoutEffect semantics.
+ *                  If omitted, the effect runs after every render.
+ * @param options - Configuration for finalizer execution mode (sync or fork) and strategy
+ *
+ * @returns An Effect that produces void
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function*() {
+ *   const ref = React.useRef<HTMLDivElement>(null)
+ *   yield* Component.useReactLayoutEffect(
+ *     () => Effect.gen(function* () {
+ *       const element = ref.current
+ *       if (element) {
+ *         const rect = element.getBoundingClientRect()
+ *         yield* Console.log(`Element dimensions: ${ rect.width }x${ rect.height }`)
+ *       }
+ *     }),
+ *     [],
+ *   )
+ *   return <div ref={ref}>Content</div>
+ * })
+ * ```
  */
 export const useReactLayoutEffect = Effect.fnUntraced(function* <E, R>(
     f: () => Effect.Effect<void, E, R>,
@@ -663,7 +880,23 @@ export const useReactLayoutEffect = Effect.fnUntraced(function* <E, R>(
 })
 
 /**
- * Get a synchronous run function for the current runtime context.
+ * Effect hook that provides a synchronous function to execute Effects within the current runtime context.
+ *
+ * This hook returns a function that can execute Effects synchronously, blocking until completion.
+ * Use this when you need to run Effects from non-Effect code (e.g., event handlers, callbacks)
+ * within a component.
+ *
+ * @returns An Effect that produces a function capable of synchronously executing Effects
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function*() {
+ *   const runSync = yield* Component.useRunSync<SomeService>() // Specify required services
+ *   const runSync = yield* Component.useRunSync() // Or no service requirements
+ *
+ *   return <button onClick={() => runSync(someEffect)}>Click me</button>
+ * })
+ * ```
  */
 export const useRunSync = <R = never>(): Effect.Effect<
     <A, E = never>(effect: Effect.Effect<A, E, Scope.Scope | R>) => A,
@@ -672,7 +905,23 @@ export const useRunSync = <R = never>(): Effect.Effect<
 > => Effect.andThen(Effect.runtime(), Runtime.runSync)
 
 /**
- * Get a Promise-based run function for the current runtime context.
+ * Effect hook that provides an asynchronous function to execute Effects within the current runtime context.
+ *
+ * This hook returns a function that executes Effects asynchronously, returning a Promise that resolves
+ * with the Effect's result. Use this when you need to run Effects from non-Effect code (e.g., event handlers,
+ * async callbacks) and want to handle the result asynchronously.
+ *
+ * @returns An Effect that produces a function capable of asynchronously executing Effects
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function*() {
+ *   const runPromise = yield* Component.useRunPromise<SomeService>() // Specify required services
+ *   const runPromise = yield* Component.useRunPromise() // Or no service requirements
+ *
+ *   return <button onClick={() => runPromise(someEffect)}>Click me</button>
+ * })
+ * ```
  */
 export const useRunPromise = <R = never>(): Effect.Effect<
     <A, E = never>(effect: Effect.Effect<A, E, Scope.Scope | R>) => Promise<A>,
@@ -681,7 +930,32 @@ export const useRunPromise = <R = never>(): Effect.Effect<
 > => Effect.andThen(Effect.runtime(), context => Runtime.runPromise(context))
 
 /**
- * Turns a function returning an effect into a memoized synchronous function.
+ * Effect hook that memoizes a function that returns an Effect, providing synchronous execution.
+ *
+ * This hook wraps a function that returns an Effect and returns a memoized version that:
+ * - Executes the Effect synchronously when called
+ * - Is memoized based on the provided dependency array
+ * - Maintains referential equality across renders when dependencies don't change
+ *
+ * Use this to create stable callback references for event handlers and other scenarios
+ * where you need to execute Effects synchronously from non-Effect code.
+ *
+ * @param f    - A function that accepts arguments and returns an Effect
+ * @param deps - Dependency array. The memoized function is recreated when dependencies change.
+ *
+ * @returns An Effect that produces a memoized function with the same signature as `f`
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function* (props: { onSave: (data: Data) => void }) {
+ *   const handleSave = yield* Component.useCallbackSync(
+ *     (data: Data) => Effect.sync(() => props.onSave(data)),
+ *     [props.onSave],
+ *   )
+ *
+ *   return <button onClick={() => handleSave(myData)}>Save</button>
+ * })
+ * ```
  */
 export const useCallbackSync = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
     f: (...args: Args) => Effect.Effect<A, E, R>,
@@ -696,7 +970,32 @@ export const useCallbackSync = Effect.fnUntraced(function* <Args extends unknown
 })
 
 /**
- * Turns a function returning an effect into a memoized Promise-based asynchronous function.
+ * Effect hook that memoizes a function that returns an Effect, providing asynchronous execution.
+ *
+ * This hook wraps a function that returns an Effect and returns a memoized version that:
+ * - Executes the Effect asynchronously when called, returning a Promise
+ * - Is memoized based on the provided dependency array
+ * - Maintains referential equality across renders when dependencies don't change
+ *
+ * Use this to create stable callback references for async event handlers and other scenarios
+ * where you need to execute Effects asynchronously from non-Effect code.
+ *
+ * @param f    - A function that accepts arguments and returns an Effect
+ * @param deps - Dependency array. The memoized function is recreated when dependencies change.
+ *
+ * @returns An Effect that produces a memoized function that returns a Promise
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.make(function* (props: { onSave: (data: Data) => void }) {
+ *   const handleSave = yield* Component.useCallbackPromise(
+ *     (data: Data) => Effect.promise(() => props.onSave(data)),
+ *     [props.onSave],
+ *   )
+ *
+ *   return <button onClick={() => handleSave(myData)}>Save</button>
+ * })
+ * ```
  */
 export const useCallbackPromise = Effect.fnUntraced(function* <Args extends unknown[], A, E, R>(
     f: (...args: Args) => Effect.Effect<A, E, R>,
@@ -715,16 +1014,70 @@ export declare namespace useContext {
 }
 
 /**
- * Hook that constructs a layer and returns the created context.
+ * Effect hook that constructs an Effect Layer and returns the resulting context.
  *
- * The layer gets reconstructed everytime `layer` changes, so make sure its value is stable.
+ * This hook creates a managed runtime from the provided layer and returns the context it produces.
+ * The layer is reconstructed whenever its value changes, so ensure the layer reference is stable
+ * (typically by memoizing it or defining it outside the component).
  *
- * Building a layer containing asynchronous effects require the component calling this hook to be made async using `Async.async`.
+ * The hook automatically manages the layer's lifecycle:
+ * - The layer is built when the component mounts or when the layer reference changes
+ * - Resources are properly released when the component unmounts or dependencies change
+ * - Finalizers are executed according to the configured execution strategy
+ *
+ * @param layer   - The Effect Layer to construct. Should be a stable reference to avoid unnecessary
+ *                  reconstruction. Consider memoizing with React.useMemo if defined inline.
+ * @param options - Configuration for scope and finalizer behavior
+ *
+ * @returns An Effect that produces the context created by the layer
+ *
+ * @throws If the layer contains asynchronous effects, the component must be wrapped with `Async.async`
+ *
+ * @example
+ * ```tsx
+ * const MyLayer = Layer.succeed(MyService, new MyServiceImpl())
+ * const MyComponent = Component.make(function*() {
+ *   const context = yield* Component.useContextFromLayer(MyLayer)
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
+ *   )
+ *
+ *   return <Sub />
+ * })
+ * ```
+ *
+ * @example With memoized layer
+ * ```tsx
+ * const MyComponent = Component.make(function*(props: { id: string })) {
+ *   const context = yield* Component.useContextFromLayer(
+ *     React.useMemo(() => Layer.succeed(MyService, new MyServiceImpl(props.id)), [props.id])
+ *   )
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
+ *   )
+ *
+ *   return <Sub />
+ * })
+ * ```
+ *
+ * @example With async layer
+ * ```tsx
+ * const MyAsyncLayer = Layer.effect(MyService, someAsyncEffect)
+ * const MyComponent = Component.make(function*() {
+ *   const context = yield* Component.useContextFromLayer(MyAsyncLayer)
+ *   const Sub = yield* SubComponent.use.pipe(
+ *     Effect.provide(context)
+ *   )
+ *
+ *   return <Sub />
+ * }).pipe(
+ *   Async.async // Required to handle async layer effects
+ * )
  */
-export const useContext = <ROut, E, RIn>(
+export const useContextFromLayer = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
     options?: useContext.Options,
-): Effect.Effect<Context.Context<ROut>, E, Exclude<RIn, Scope.Scope>> => useOnChange(() => Effect.context<RIn>().pipe(
+): Effect.Effect<Context.Context<ROut>, E, RIn | Scope.Scope> => useOnChange(() => Effect.context<RIn>().pipe(
     Effect.map(context => ManagedRuntime.make(Layer.provide(layer, Layer.succeedContext(context)))),
     Effect.tap(runtime => Effect.addFinalizer(() => runtime.disposeEffect)),
     Effect.andThen(runtime => runtime.runtimeEffect),

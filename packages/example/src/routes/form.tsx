@@ -2,7 +2,8 @@ import { Button, Container, Flex, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
-import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
+import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
+import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { runtime } from "@/runtime"
 
@@ -38,7 +39,7 @@ const RegisterFormSubmitSchema = Schema.Struct({
     birth: Schema.OptionFromSelf(Schema.DateTimeUtcFromSelf),
 })
 
-class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
+class RegisterFormService extends Effect.Service<RegisterFormService>()("RegisterFormService", {
     scoped: Form.service({
         schema: RegisterFormSchema.pipe(
             Schema.compose(
@@ -62,15 +63,16 @@ class RegisterForm extends Effect.Service<RegisterForm>()("RegisterForm", {
     })
 }) {}
 
-class RegisterFormView extends Component.makeUntraced("RegisterFormView")(function*() {
-    const form = yield* RegisterForm
+class RegisterFormView extends Component.make("RegisterFormView")(function*() {
+    const form = yield* RegisterFormService
     const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
         form.canSubmit,
         form.mutation.result,
     ])
 
     const runPromise = yield* Component.useRunPromise()
-    const TextFieldFormInputFC = yield* TextFieldFormInput
+    const TextFieldFormInput = yield* TextFieldFormInputView.use
+    const TextFieldOptionalFormInput = yield* TextFieldOptionalFormInputView.use
 
     yield* Component.useOnMount(() => Effect.gen(function*() {
         yield* Effect.addFinalizer(() => Console.log("RegisterFormView unmounted"))
@@ -85,16 +87,15 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
                 void runPromise(form.submit)
             }}>
                 <Flex direction="column" gap="2">
-                    <TextFieldFormInputFC
+                    <TextFieldFormInput
                         field={yield* form.field(["email"])}
                     />
 
-                    <TextFieldFormInputFC
+                    <TextFieldFormInput
                         field={yield* form.field(["password"])}
                     />
 
-                    <TextFieldFormInputFC
-                        optional
+                    <TextFieldOptionalFormInput
                         type="datetime-local"
                         field={yield* form.field(["birth"])}
                         defaultValue=""
@@ -115,13 +116,13 @@ class RegisterFormView extends Component.makeUntraced("RegisterFormView")(functi
     )
 }) {}
 
-const RegisterPage = Component.makeUntraced("RegisterPage")(function*() {
-    const RegisterFormViewFC = yield* Effect.provide(
-        RegisterFormView,
-        yield* Component.useContext(RegisterForm.Default),
+const RegisterPage = Component.make("RegisterPageView")(function*() {
+    const RegisterForm = yield* Effect.provide(
+        RegisterFormView.use,
+        yield* Component.useContextFromLayer(RegisterFormService.Default),
     )
 
-    return <RegisterFormViewFC />
+    return <RegisterForm />
 }).pipe(
     Component.withRuntime(runtime.context)
 )

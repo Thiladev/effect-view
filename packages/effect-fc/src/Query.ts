@@ -6,12 +6,12 @@ import * as Result from "./Result.js"
 export const QueryTypeId: unique symbol = Symbol.for("@effect-fc/Query/Query")
 export type QueryTypeId = typeof QueryTypeId
 
-export interface Query<in out K extends Query.AnyKey, in out A, in out E = never, in out R = never, in out P = never>
+export interface Query<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never, in out P = never>
 extends Pipeable.Pipeable {
     readonly [QueryTypeId]: QueryTypeId
 
-    readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | R>
-    readonly key: Stream.Stream<K>
+    readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | KR | R>
+    readonly key: Stream.Stream<K, KE, KR>
     readonly f: (key: K) => Effect.Effect<A, E, R>
     readonly initialProgress: P
 
@@ -37,13 +37,13 @@ export declare namespace Query {
     export type AnyKey = readonly any[]
 }
 
-export class QueryImpl<in out K extends Query.AnyKey, in out A, in out E = never, in out R = never, in out P = never>
-extends Pipeable.Class() implements Query<K, A, E, R, P> {
+export class QueryImpl<in out K extends Query.AnyKey, in out A, in out KE = never, in out KR = never, in out E = never, in out R = never, in out P = never>
+extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
     readonly [QueryTypeId]: QueryTypeId = QueryTypeId
 
     constructor(
-        readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | R>,
-        readonly key: Stream.Stream<K>,
+        readonly context: Context.Context<Scope.Scope | QueryClient.QueryClient | KR | R>,
+        readonly key: Stream.Stream<K, KE, KR>,
         readonly f: (key: K) => Effect.Effect<A, E, R>,
         readonly initialProgress: P,
 
@@ -77,6 +77,7 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
         ], { concurrency: "unbounded" }).pipe(
             Effect.ignore,
             this.runSemaphore.withPermits(1),
+            Effect.provide(this.context),
         )
     }
 
@@ -265,11 +266,11 @@ extends Pipeable.Class() implements Query<K, A, E, R, P> {
     }
 }
 
-export const isQuery = (u: unknown): u is Query<readonly unknown[], unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, QueryTypeId)
+export const isQuery = (u: unknown): u is Query<readonly unknown[], unknown> => Predicate.hasProperty(u, QueryTypeId)
 
 export declare namespace make {
-    export interface Options<K extends Query.AnyKey, A, E = never, R = never, P = never> {
-        readonly key: Stream.Stream<K>
+    export interface Options<K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never> {
+        readonly key: Stream.Stream<K, KE, KR>
         readonly f: (key: NoInfer<K>) => Effect.Effect<A, E, Result.forkEffect.InputContext<R, NoInfer<P>>>
         readonly initialProgress?: P
         readonly staleTime?: Duration.DurationInput
@@ -277,17 +278,17 @@ export declare namespace make {
     }
 }
 
-export const make = Effect.fnUntraced(function* <K extends Query.AnyKey, A, E = never, R = never, P = never>(
-    options: make.Options<K, A, E, R, P>
+export const make = Effect.fnUntraced(function* <K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never>(
+    options: make.Options<K, A, KE, KR, E, R, P>
 ): Effect.fn.Return<
-    Query<K, A, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
+    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
     never,
-    Scope.Scope | QueryClient.QueryClient | Result.forkEffect.OutputContext<A, E, R, P>
+    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>
 > {
     const client = yield* QueryClient.QueryClient
 
-    return new QueryImpl(
-        yield* Effect.context<Scope.Scope | QueryClient.QueryClient | Result.forkEffect.OutputContext<A, E, R, P>>(),
+    return new QueryImpl<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>(
+        yield* Effect.context<Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>>(),
         options.key,
         options.f as any,
         options.initialProgress as P,
@@ -304,12 +305,12 @@ export const make = Effect.fnUntraced(function* <K extends Query.AnyKey, A, E = 
     )
 })
 
-export const service = <K extends Query.AnyKey, A, E = never, R = never, P = never>(
-    options: make.Options<K, A, E, R, P>
+export const service = <K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never>(
+    options: make.Options<K, A, KE, KR, E, R, P>
 ): Effect.Effect<
-    Query<K, A, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
+    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
     never,
-    Scope.Scope | QueryClient.QueryClient | Result.forkEffect.OutputContext<A, E, R, P>
+    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>
 > => Effect.tap(
     make(options),
     query => Effect.forkScoped(query.run),

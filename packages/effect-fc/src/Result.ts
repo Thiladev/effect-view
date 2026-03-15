@@ -240,16 +240,16 @@ export const unsafeForkEffect = <A, E, R, P = never>(
         Effect.provide(Layer.empty.pipe(
             Layer.provideMerge(makeProgressLayer<A, E, P>()),
             Layer.provideMerge(Layer.succeed(State<A, E, P>(), {
-                get: ref,
+                get: Ref.get(ref),
                 set: v => Effect.andThen(Ref.set(ref, v), PubSub.publish(pubsub, v))
             })),
         )),
     ))),
     Effect.map(({ ref, pubsub, fiber }) => [
         Subscribable.make({
-            get: ref,
+            get: Ref.get(ref),
             changes: Stream.unwrapScoped(Effect.map(
-                Effect.all([ref, Stream.fromPubSub(pubsub, { scoped: true })]),
+                Effect.all([Ref.get(ref), Stream.fromPubSub(pubsub, { scoped: true })]),
                 ([latest, stream]) => Stream.concat(Stream.make(latest), stream),
             )),
         }),

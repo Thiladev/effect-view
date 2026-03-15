@@ -15,39 +15,37 @@ Documentation is currently being written. In the meantime, you can take a look a
 
 ## What writing components looks like
 ```typescript
-export class Todos extends Component.make("Todos")(function*() {
+export class TodosView extends Component.make("TodosView")(function*() {
     const state = yield* TodosState
-    const [todos] = yield* useSubscribables(state.ref)
+    const [todos] = yield* Component.useSubscribables([state.subscriptionRef])
 
-    yield* useOnMount(() => Effect.andThen(
+    yield* Component.useOnMount(() => Effect.andThen(
         Console.log("Todos mounted"),
         Effect.addFinalizer(() => Console.log("Todos unmounted")),
     ))
 
-    const TodoFC = yield* Todo
+    const Todo = yield* TodoView.use
 
     return (
         <Container>
             <Heading align="center">Todos</Heading>
 
             <Flex direction="column" align="stretch" gap="2" mt="2">
-                <TodoFC _tag="new" />
+                <Todo _tag="new" />
 
                 {Chunk.map(todos, todo =>
-                    <TodoFC key={todo.id} _tag="edit" id={todo.id} />
+                    <Todo key={todo.id} _tag="edit" id={todo.id} />
                 )}
             </Flex>
         </Container>
     )
 }) {}
 
-const TodosStateLive = TodosState.Default("todos")
+const Index = Component.make("IndexView")(function*() {
+    const context = yield* Component.useContextFromLayer(TodosState.Default)
+    const Todos = yield* Effect.provide(TodosView.use, context)
 
-const Index = Component.make("Index")(function*() {
-    const context = yield* useContext(TodosStateLive)
-    const TodosFC = yield* Effect.provide(Todos, context)
-
-    return <TodosFC />
+    return <Todos />
 }).pipe(
     Component.withRuntime(runtime.context)
 )

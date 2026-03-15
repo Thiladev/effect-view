@@ -2,19 +2,19 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Effect } from "effect"
 import { Component } from "effect-fc"
 import { runtime } from "@/runtime"
-import { Todos } from "@/todo/Todos"
-import { TodosState } from "@/todo/TodosState.service"
+import { TodosState } from "@/todo/TodosState"
+import { TodosView } from "@/todo/TodosView"
 
 
 const TodosStateLive = TodosState.Default("todos")
 
-const Index = Component.makeUntraced("Index")(function*() {
-    const TodosFC = yield* Effect.provide(
-        Todos,
-        yield* Component.useContext(TodosStateLive),
+const Index = Component.make("IndexView")(function*() {
+    const Todos = yield* Effect.provide(
+        TodosView.use,
+        yield* Component.useContextFromLayer(TodosStateLive),
     )
 
-    return <TodosFC />
+    return <Todos />
 }).pipe(
     Component.withRuntime(runtime.context)
 )

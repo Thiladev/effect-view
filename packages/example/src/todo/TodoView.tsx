@@ -5,9 +5,10 @@ import { Component, Form, Subscribable } from "effect-fc"
 import { FaArrowDown, FaArrowUp } from "react-icons/fa"
 import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
-import { TextFieldFormInput } from "@/lib/form/TextFieldFormInput"
+import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
+import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
-import { TodosState } from "./TodosState.service"
+import { TodosState } from "./TodosState"
 
 
 const TodoFormSchema = Schema.compose(Schema.Struct({
@@ -30,7 +31,7 @@ export type TodoProps = (
     | { readonly _tag: "edit", readonly id: string }
 )
 
-export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoProps) {
+export class TodoView extends Component.make("TodoView")(function*(props: TodoProps) {
     const state = yield* TodosState
 
     const [
@@ -83,18 +84,18 @@ export class Todo extends Component.makeUntraced("Todo")(function*(props: TodoPr
 
     const runSync = yield* Component.useRunSync()
     const runPromise = yield* Component.useRunPromise<DateTime.CurrentTimeZone>()
-    const TextFieldFormInputFC = yield* TextFieldFormInput
+    const TextFieldFormInput = yield* TextFieldFormInputView.use
+    const TextFieldOptionalFormInput = yield* TextFieldOptionalFormInputView.use
 
 
     return (
         <Flex direction="row" align="center" gap="2">
             <Box flexGrow="1">
                 <Flex direction="column" align="stretch" gap="2">
-                    <TextFieldFormInputFC field={contentField} />
+                    <TextFieldFormInput field={contentField} />
 
                     <Flex direction="row" justify="center" align="center" gap="2">
-                        <TextFieldFormInputFC
-                            optional
+                        <TextFieldOptionalFormInput
                             field={completedAtField}
                             type="datetime-local"
                             defaultValue=""
