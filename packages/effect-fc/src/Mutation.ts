@@ -111,12 +111,12 @@ export declare namespace make {
 export const make = Effect.fnUntraced(function* <const K extends Mutation.AnyKey = never, A = void, E = never, R = never, P = never>(
     options: make.Options<K, A, E, R, P>
 ): Effect.fn.Return<
-    Mutation<K, A, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
+    Mutation<K, A, E, Result.forkEffect.OutputContext<R, P>, P>,
     never,
-    Scope.Scope | Result.forkEffect.OutputContext<A, E, R, P>
+    Scope.Scope | Result.forkEffect.OutputContext<R, P>
 > {
     return new MutationImpl(
-        yield* Effect.context<Scope.Scope | Result.forkEffect.OutputContext<A, E, R, P>>(),
+        yield* Effect.context<Scope.Scope | Result.forkEffect.OutputContext<R, P>>(),
         options.f as any,
         options.initialProgress as P,
 

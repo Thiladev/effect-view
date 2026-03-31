@@ -281,14 +281,14 @@ export declare namespace make {
 export const make = Effect.fnUntraced(function* <K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never>(
     options: make.Options<K, A, KE, KR, E, R, P>
 ): Effect.fn.Return<
-    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
+    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<R, P>, P>,
     never,
-    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>
+    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<R, P>
 > {
     const client = yield* QueryClient.QueryClient
 
-    return new QueryImpl<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>(
-        yield* Effect.context<Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>>(),
+    return new QueryImpl<K, A, KE, KR, E, Result.forkEffect.OutputContext<R, P>, P>(
+        yield* Effect.context<Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<R, P>>(),
         options.key,
         options.f as any,
         options.initialProgress as P,
@@ -308,9 +308,9 @@ export const make = Effect.fnUntraced(function* <K extends Query.AnyKey, A, KE =
 export const service = <K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never>(
     options: make.Options<K, A, KE, KR, E, R, P>
 ): Effect.Effect<
-    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<A, E, R, P>, P>,
+    Query<K, A, KE, KR, E, Result.forkEffect.OutputContext<R, P>, P>,
     never,
-    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<A, E, R, P>
+    Scope.Scope | QueryClient.QueryClient | KR | Result.forkEffect.OutputContext<R, P>
 > => Effect.tap(
     make(options),
     query => Effect.forkScoped(query.run),

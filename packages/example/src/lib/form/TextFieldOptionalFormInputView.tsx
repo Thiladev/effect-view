@@ -4,21 +4,19 @@ import { Component, Form, Subscribable } from "effect-fc"
 
 
 export declare namespace TextFieldOptionalFormInputView {
-    export interface Props
-    extends Omit<TextField.RootProps, "defaultValue">, Form.useOptionalInput.Options<string> {
-        readonly field: Form.FormField<any, Option.Option<string>>
+    export interface Props extends Omit<TextField.RootProps, "form" | "defaultValue">, Form.useOptionalInput.Options<string> {
+        readonly form: Form.Form<readonly PropertyKey[], any, Option.Option<string>>
     }
 }
-
 
 export class TextFieldOptionalFormInputView extends Component.make("TextFieldOptionalFormInputView")(function*(
     props: TextFieldOptionalFormInputView.Props
 ) {
-    const input = yield* Form.useOptionalInput(props.field, props)
+    const input = yield* Form.useOptionalInput(props.form, props)
     const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
-        props.field.issues,
-        props.field.isValidating,
-        props.field.isSubmitting,
+        props.form.issues,
+        props.form.isValidating,
+        props.form.isSubmitting,
     ])
 
     return (
@@ -27,7 +25,7 @@ export class TextFieldOptionalFormInputView extends Component.make("TextFieldOpt
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
                 disabled={!input.enabled || isSubmitting}
-                {...Struct.omit(props, "defaultValue")}
+                {...Struct.omit(props, "form", "defaultValue")}
             >
                 <TextField.Slot side="left">
                     <Switch

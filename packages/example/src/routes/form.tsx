@@ -1,11 +1,11 @@
-import { Button, Container, Flex, Text } from "@radix-ui/themes"
-import { createFileRoute } from "@tanstack/react-router"
-import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
-import { Component, Form, Subscribable } from "effect-fc"
 import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
 import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { runtime } from "@/runtime"
+import { Button, Container, Flex, Text } from "@radix-ui/themes"
+import { createFileRoute } from "@tanstack/react-router"
+import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
+import { Component, Form, Subscribable } from "effect-fc"
 
 
 const email = Schema.pattern<typeof Schema.String>(
@@ -40,34 +40,42 @@ const RegisterFormSubmitSchema = Schema.Struct({
 })
 
 class RegisterFormService extends Effect.Service<RegisterFormService>()("RegisterFormService", {
-    scoped: Form.service({
-        schema: RegisterFormSchema.pipe(
-            Schema.compose(
-                Schema.transformOrFail(
-                    Schema.typeSchema(RegisterFormSchema),
-                    Schema.typeSchema(RegisterFormSchema),
-                    {
-                        decode: v => Effect.andThen(Effect.sleep("500 millis"), ParseResult.succeed(v)),
-                        encode: ParseResult.succeed,
-                    },
+    scoped: Effect.gen(function*() {
+        const form = yield* Form.service({
+            schema: RegisterFormSchema.pipe(
+                Schema.compose(
+                    Schema.transformOrFail(
+                        Schema.typeSchema(RegisterFormSchema),
+                        Schema.typeSchema(RegisterFormSchema),
+                        {
+                            decode: v => Effect.andThen(Effect.sleep("500 millis"), ParseResult.succeed(v)),
+                            encode: ParseResult.succeed,
+                        },
+                    ),
                 ),
             ),
-        ),
 
-        initialEncodedValue: { email: "", password: "", birth: Option.none() },
-        f: Effect.fnUntraced(function*([value]) {
-            yield* Effect.sleep("500 millis")
-            return yield* Schema.decode(RegisterFormSubmitSchema)(value)
-        }),
-        debounce: "500 millis",
+            initialEncodedValue: { email: "", password: "", birth: Option.none() },
+            f: Effect.fnUntraced(function*([value]) {
+                yield* Effect.sleep("500 millis")
+                return yield* Schema.decode(RegisterFormSubmitSchema)(value)
+            }),
+        })
+
+        return {
+            form,
+            emailField: Form.focusObjectField(form, "email"),
+            passwordField: Form.focusObjectField(form, "password"),
+            birthField: Form.focusObjectField(form, "birth"),
+        } as const
     })
 }) {}
 
 class RegisterFormView extends Component.make("RegisterFormView")(function*() {
     const form = yield* RegisterFormService
     const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
-        form.canSubmit,
-        form.mutation.result,
+        form.form.canSubmit,
+        form.form.mutation.result,
     ])
 
     const runPromise = yield* Component.useRunPromise()
@@ -84,20 +92,22 @@ class RegisterFormView extends Component.make("RegisterFormView")(function*() {
         <Container width="300">
             <form onSubmit={e => {
                 e.preventDefault()
-                void runPromise(form.submit)
+                void runPromise(form.form.submit)
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInput
-                        field={yield* form.field(["email"])}
+                        form={form.emailField}
+                        debounce="250 millis"
                     />
 
                     <TextFieldFormInput
-                        field={yield* form.field(["password"])}
+                        form={form.passwordField}
+                        debounce="250 millis"
                     />
 
                     <TextFieldOptionalFormInput
                         type="datetime-local"
-                        field={yield* form.field(["birth"])}
+                        form={form.birthField}
                         defaultValue=""
                     />
 

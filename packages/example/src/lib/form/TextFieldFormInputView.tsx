@@ -1,24 +1,22 @@
 import { Callout, Flex, Spinner, TextField } from "@radix-ui/themes"
-import { Array, Option } from "effect"
+import { Array, Option, Struct } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
 
 
 export declare namespace TextFieldFormInputView {
-    export interface Props
-    extends TextField.RootProps, Form.useInput.Options {
-        readonly field: Form.FormField<any, string>
+    export interface Props extends Omit<TextField.RootProps, "form">, Form.useInput.Options {
+        readonly form: Form.Form<readonly PropertyKey[], any, string>
     }
 }
-
 
 export class TextFieldFormInputView extends Component.make("TextFieldFormInputView")(function*(
     props: TextFieldFormInputView.Props
 ) {
-    const input = yield* Form.useInput(props.field, props)
+    const input = yield* Form.useInput(props.form, props)
     const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
-        props.field.issues,
-        props.field.isValidating,
-        props.field.isSubmitting,
+        props.form.issues,
+        props.form.isValidating,
+        props.form.isSubmitting,
     ])
 
     return (
@@ -27,7 +25,7 @@ export class TextFieldFormInputView extends Component.make("TextFieldFormInputVi
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
                 disabled={isSubmitting}
-                {...props}
+                {...Struct.omit(props, "form")}
             >
                 {isValidating &&
                     <TextField.Slot side="right">

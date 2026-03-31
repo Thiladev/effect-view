@@ -1,7 +1,10 @@
-import { Effect, Equivalence, Stream, Subscribable } from "effect"
+import { Effect, Equivalence, Stream } from "effect"
+import { Subscribable } from "effect-lens"
 import * as React from "react"
 import * as Component from "./Component.js"
 
+
+export * from "effect-lens/Subscribable"
 
 export const zipLatestAll = <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
     ...elements: T
@@ -48,5 +51,3 @@ export const useSubscribables = Effect.fnUntraced(function* <const T extends rea
 
     return reactStateValue as any
 })
-
-export * from "effect/Subscribable"

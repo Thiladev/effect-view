@@ -1,4 +1,5 @@
-import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, Pipeable, Predicate, PubSub, pipe, Ref, type Scope, Stream, Subscribable } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, pipe, Pipeable, Predicate, PubSub, Ref, type Scope, Stream, type Subscribable, SynchronizedRef } from "effect"
+import { Lens } from "effect-lens"
 
 
 export const ResultTypeId: unique symbol = Symbol.for("@effect-fc/Result/Result")
@@ -15,10 +16,6 @@ export type Final<A, E = never, P = never> = (Success<A> | Failure<E>) & ({} | F
 export type Flags<P = never> = WillFetch | WillRefresh | Refreshing<P>
 
 export declare namespace Result {
-    export interface Prototype extends Pipeable.Pipeable, Equal.Equal {
-        readonly [ResultTypeId]: ResultTypeId
-    }
-
     export type Success<R extends Result<any, any, any>> = [R] extends [Result<infer A, infer _E, infer _P>] ? A : never
     export type Failure<R extends Result<any, any, any>> = [R] extends [Result<infer _A, infer E, infer _P>] ? E : never
     export type Progress<R extends Result<any, any, any>> = [R] extends [Result<infer _A, infer _E, infer P>] ? P : never
@@ -28,21 +25,21 @@ export declare namespace Flags {
     export type Keys = keyof WillFetch & WillRefresh & Refreshing<any>
 }
 
-export interface Initial extends Result.Prototype {
+export interface Initial extends ResultPrototype {
     readonly _tag: "Initial"
 }
 
-export interface Running<P = never> extends Result.Prototype {
+export interface Running<P = never> extends ResultPrototype {
     readonly _tag: "Running"
     readonly progress: P
 }
 
-export interface Success<A> extends Result.Prototype {
+export interface Success<A> extends ResultPrototype {
     readonly _tag: "Success"
     readonly value: A
 }
 
-export interface Failure<E = never> extends Result.Prototype {
+export interface Failure<E = never> extends ResultPrototype {
     readonly _tag: "Failure"
     readonly cause: Cause.Cause<E>
 }
@@ -61,7 +58,11 @@ export interface Refreshing<P = never> {
 }
 
 
-const ResultPrototype = Object.freeze({
+export interface ResultPrototype extends Pipeable.Pipeable, Equal.Equal {
+    readonly [ResultTypeId]: ResultTypeId
+}
+
+export const ResultPrototype: ResultPrototype = Object.freeze({
     ...Pipeable.Prototype,
     [ResultTypeId]: ResultTypeId,
 
@@ -95,7 +96,7 @@ const ResultPrototype = Object.freeze({
             Hash.cached(this),
         )
     },
-} as const satisfies Result.Prototype)
+} as const)
 
 
 export const isResult = (u: unknown): u is Result<unknown, unknown, unknown> => Predicate.hasProperty(u, ResultTypeId)
@@ -162,52 +163,40 @@ export const toExit: {
 }
 
 
-export interface State<A, E = never, P = never> {
-    readonly get: Effect.Effect<Result<A, E, P>>
-    readonly set: (v: Result<A, E, P>) => Effect.Effect<void>
-}
-
-export const State = <A, E = never, P = never>(): Context.Tag<State<A, E, P>, State<A, E, P>> => Context.GenericTag("@effect-fc/Result/State")
-
 export interface Progress<P = never> {
-    readonly update: <E, R>(
-        f: (previous: P) => Effect.Effect<P, E, R>
-    ) => Effect.Effect<void, PreviousResultNotRunningNorRefreshing | E, R>
+    readonly progress: Lens.Lens<P, PreviousResultNotRunningNorRefreshing, never, never, never>
 }
+export const Progress = <P = never>(): Context.Tag<Progress<P>, Progress<P>> => Context.GenericTag("@effect-fc/Result/Progress")
 
 export class PreviousResultNotRunningNorRefreshing extends Data.TaggedError("@effect-fc/Result/PreviousResultNotRunningNorRefreshing")<{
     readonly previous: Result<unknown, unknown, unknown>
 }> {}
 
-export const Progress = <P = never>(): Context.Tag<Progress<P>, Progress<P>> => Context.GenericTag("@effect-fc/Result/Progress")
-
-export const makeProgressLayer = <A, E, P = never>(): Layer.Layer<
-    Progress<P>,
-    never,
-    State<A, E, P>
-> => Layer.effect(Progress<P>(), Effect.gen(function*() {
-    const state = yield* State<A, E, P>()
-
-    return {
-        update: <FE, FR>(f: (previous: P) => Effect.Effect<P, FE, FR>) => Effect.Do.pipe(
-            Effect.bind("previous", () => Effect.andThen(state.get, previous =>
-                (isRunning(previous) || hasRefreshingFlag(previous))
-                    ? Effect.succeed(previous)
-                    : Effect.fail(new PreviousResultNotRunningNorRefreshing({ previous })),
-            )),
-            Effect.bind("progress", ({ previous }) => f(previous.progress)),
-            Effect.let("next", ({ previous, progress }) => isRunning(previous)
-                ? running(progress)
-                : refreshing(previous, progress) as Final<A, E, P> & Refreshing<P>
+export const makeProgressLayer = <A, E, P = never>(
+    state: Lens.Lens<Result<A, E, P>, never, never, never, never>
+): Layer.Layer<Progress<P> | Progress<never>, never, never> => Layer.succeed(
+    Progress<P>() as Context.Tag<Progress<P> | Progress<never>, Progress<P> | Progress<never>>,
+    {
+        progress: state.pipe(
+            Lens.mapEffect(
+                a => (isRunning(a) || hasRefreshingFlag(a))
+                    ? Effect.succeed(a)
+                    : Effect.fail(new PreviousResultNotRunningNorRefreshing({ previous: a })),
+                (_, b) => Effect.succeed(b),
             ),
-            Effect.andThen(({ next }) => state.set(next)),
-        ),
-    }
-}))
+            Lens.map(
+                a => a.progress,
+                (a, b) => isRunning(a)
+                    ? running(b)
+                    : refreshing(a, b) as Final<A, E, P> & Refreshing<P>,
+            ),
+        )
+    },
+)
 
 
 export namespace unsafeForkEffect {
-    export type OutputContext<A, E, R, P> = Exclude<R, State<A, E, P> | Progress<P> | Progress<never>>
+    export type OutputContext<R, P> = Exclude<R, Progress<P> | Progress<never>>
 
     export interface Options<A, E, P> {
         readonly initial?: Initial | Final<A, E, P>
@@ -215,55 +204,56 @@ export namespace unsafeForkEffect {
     }
 }
 
-export const unsafeForkEffect = <A, E, R, P = never>(
+export const unsafeForkEffect = Effect.fnUntraced(function* <A, E, R, P = never>(
     effect: Effect.Effect<A, E, R>,
     options?: unsafeForkEffect.Options<NoInfer<A>, NoInfer<E>, P>,
-): Effect.Effect<
+): Effect.fn.Return<
     readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
     never,
-    Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
-> => Effect.Do.pipe(
-    Effect.bind("ref", () => Ref.make(options?.initial ?? initial<A, E, P>())),
-    Effect.bind("pubsub", () => PubSub.unbounded<Result<A, E, P>>()),
-    Effect.bind("fiber", ({ ref, pubsub }) => Effect.forkScoped(State<A, E, P>().pipe(
-        Effect.andThen(state => state.set(
-            (isFinal(options?.initial) && hasWillRefreshFlag(options?.initial))
-                ? refreshing(options.initial, options?.initialProgress) as Result<A, E, P>
-                : running(options?.initialProgress)
-        ).pipe(
-            Effect.andThen(effect),
-            Effect.onExit(exit => Effect.andThen(
-                state.set(fromExit(exit)),
-                Effect.forkScoped(PubSub.shutdown(pubsub)),
-            )),
-        )),
-        Effect.provide(Layer.empty.pipe(
-            Layer.provideMerge(makeProgressLayer<A, E, P>()),
-            Layer.provideMerge(Layer.succeed(State<A, E, P>(), {
-                get: Ref.get(ref),
-                set: v => Effect.andThen(Ref.set(ref, v), PubSub.publish(pubsub, v))
-            })),
-        )),
-    ))),
-    Effect.map(({ ref, pubsub, fiber }) => [
-        Subscribable.make({
-            get: Ref.get(ref),
-            changes: Stream.unwrapScoped(Effect.map(
+    Scope.Scope | unsafeForkEffect.OutputContext<R, P>
+> {
+    const ref = yield* SynchronizedRef.make<Result<A, E, P>>(options?.initial ?? initial<A, E, P>())
+    const pubsub = yield* PubSub.unbounded<Result<A, E, P>>()
+
+    const state = Lens.make<Result<A, E, P>, never, never, never, never>({
+        get get() { return Ref.get(ref) },
+        get changes() {
+            return Stream.unwrapScoped(Effect.map(
                 Effect.all([Ref.get(ref), Stream.fromPubSub(pubsub, { scoped: true })]),
                 ([latest, stream]) => Stream.concat(Stream.make(latest), stream),
+            ))
+        },
+        modify: f => Ref.get(ref).pipe(
+            Effect.flatMap(f),
+            Effect.flatMap(([b, a]) => Ref.set(ref, a).pipe(
+                Effect.as(b),
+                Effect.zipLeft(PubSub.publish(pubsub, a))
             )),
-        }),
-        fiber,
-    ]),
-) as Effect.Effect<
-    readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
-    never,
-    Scope.Scope | unsafeForkEffect.OutputContext<A, E, R, P>
->
+        ),
+    })
+
+    const fiber = yield* Effect.gen(function*() {
+        yield* Lens.set(
+            state,
+            (isFinal(options?.initial) && hasWillRefreshFlag(options?.initial))
+                ? refreshing(options.initial, options?.initialProgress) as Result<A, E, P>
+                : running(options?.initialProgress),
+        )
+        return yield* Effect.onExit(effect, exit => Effect.andThen(
+            Lens.set(state, fromExit(exit)),
+            Effect.forkScoped(PubSub.shutdown(pubsub)),
+        ))
+    }).pipe(
+        Effect.forkScoped,
+        Effect.provide(makeProgressLayer(state)),
+    )
+
+    return [state, fiber] as const
+})
 
 export namespace forkEffect {
     export type InputContext<R, P> = R extends Progress<infer X> ? [X] extends [P] ? R : never : R
-    export type OutputContext<A, E, R, P> = unsafeForkEffect.OutputContext<A, E, R, P>
+    export type OutputContext<R, P> = unsafeForkEffect.OutputContext<R, P>
     export interface Options<A, E, P> extends unsafeForkEffect.Options<A, E, P> {}
 }
 
@@ -274,6 +264,6 @@ export const forkEffect: {
     ): Effect.Effect<
         readonly [result: Subscribable.Subscribable<Result<A, E, P>, never, never>, fiber: Fiber.Fiber<A, E>],
         never,
-        Scope.Scope | forkEffect.OutputContext<A, E, R, P>
+        Scope.Scope | forkEffect.OutputContext<R, P>
     >
 } = unsafeForkEffect

@@ -13,30 +13,30 @@
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@tanstack/react-router": "^1.154.12",
-    "@tanstack/react-router-devtools": "^1.154.12",
-    "@tanstack/router-plugin": "^1.154.12",
-    "@types/react": "^19.2.9",
+    "@tanstack/react-router": "^1.168.3",
+    "@tanstack/react-router-devtools": "^1.166.11",
+    "@tanstack/router-plugin": "^1.167.4",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.2",
-    "globals": "^17.0.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "type-fest": "^5.4.1",
-    "vite": "^7.3.1"
+    "@vitejs/plugin-react": "^6.0.1",
+    "globals": "^17.4.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "type-fest": "^5.5.0",
+    "vite": "^8.0.2"
   },
   "dependencies": {
-    "@effect/platform": "^0.94.2",
-    "@effect/platform-browser": "^0.74.0",
-    "@radix-ui/themes": "^3.2.1",
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-browser": "^0.76.0",
+    "@radix-ui/themes": "^3.3.0",
     "@typed/id": "^0.17.2",
-    "effect": "^3.19.15",
+    "effect": "^3.21.0",
     "effect-fc": "workspace:*",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.6.0"
   },
   "overrides": {
-    "@types/react": "^19.2.9",
-    "effect": "^3.19.15",
-    "react": "^19.2.3"
+    "@types/react": "^19.2.14",
+    "effect": "^3.21.0",
+    "react": "^19.2.4"
   }
 }

@@ -25,6 +25,7 @@
     "noPropertyAccessFromIndexSignature": false,
 
     // Build
+    "rootDir": "./src",
     "outDir": "./dist",
     "declaration": true,
     "sourceMap": true,
@@ -34,5 +35,6 @@
     ]
   },
 
-  "include": ["./src"]
+  "include": ["./src"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts"]
 }

@@ -1,13 +1,13 @@
-import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
-import { GetRandomValues, makeUuid4 } from "@typed/id"
-import { Chunk, type DateTime, Effect, Match, Option, Ref, Schema, Stream } from "effect"
-import { Component, Form, Subscribable } from "effect-fc"
-import { FaArrowDown, FaArrowUp } from "react-icons/fa"
-import { FaDeleteLeft } from "react-icons/fa6"
 import * as Domain from "@/domain"
 import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
 import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
+import { Box, Button, Flex, IconButton } from "@radix-ui/themes"
+import { GetRandomValues, makeUuid4 } from "@typed/id"
+import { Chunk, type DateTime, Effect, Match, Option, Ref, Schema, Stream } from "effect"
+import { Component, Form, Lens, Subscribable } from "effect-fc"
+import { FaArrowDown, FaArrowUp } from "react-icons/fa"
+import { FaDeleteLeft } from "react-icons/fa6"
 import { TodosState } from "./TodosState"
 
 
@@ -59,20 +59,19 @@ export class TodoView extends Component.make("TodoView")(function*(props: TodoPr
                 Match.tag("new", () => Ref.update(state.ref, Chunk.prepend(todo)).pipe(
                     Effect.andThen(makeTodo),
                     Effect.andThen(Schema.encode(TodoFormSchema)),
-                    Effect.andThen(v => Ref.set(form.encodedValue, v)),
+                    Effect.andThen(v => Lens.set(form.encodedValue, v)),
                 )),
                 Match.tag("edit", ({ id }) => Ref.set(state.getElementRef(id), todo)),
                 Match.exhaustive,
             ),
             autosubmit: props._tag === "edit",
-            debounce: "250 millis",
         })
 
         return [
             indexRef,
             form,
-            yield* form.field(["content"]),
-            yield* form.field(["completedAt"]),
+            Form.focusObjectField(form, "content"),
+            Form.focusObjectField(form, "completedAt"),
         ] as const
     }), [props._tag, props._tag === "edit" ? props.id : undefined])
 
@@ -92,11 +91,14 @@ export class TodoView extends Component.make("TodoView")(function*(props: TodoPr
         <Flex direction="row" align="center" gap="2">
             <Box flexGrow="1">
                 <Flex direction="column" align="stretch" gap="2">
-                    <TextFieldFormInput field={contentField} />
+                    <TextFieldFormInput
+                        form={contentField}
+                        debounce="250 millis"
+                    />
 
                     <Flex direction="row" justify="center" align="center" gap="2">
                         <TextFieldOptionalFormInput
-                            field={completedAtField}
+                            form={completedAtField}
                             type="datetime-local"
                             defaultValue=""
                         />
