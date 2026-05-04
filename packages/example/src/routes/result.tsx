@@ -21,7 +21,7 @@ const ResultView = Component.makeUntraced("Result")(function*() {
         Effect.tap(Effect.sleep("250 millis")),
         Result.forkEffect,
     ))
-    const [result] = yield* Subscribable.useSubscribables([resultSubscribable])
+    const [result] = yield* Subscribable.useAll([resultSubscribable])
 
     yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
         Effect.andThen(observer => observer.subscribe),

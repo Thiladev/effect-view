@@ -19,7 +19,7 @@ export const zipLatestAll = <const T extends readonly Subscribable.Subscribable<
     changes: Stream.zipLatestAll(...elements.map(v => v.changes)),
 }) as any
 
-export declare namespace useSubscribables {
+export declare namespace useAll {
     export type Success<T extends readonly Subscribable.Subscribable<any, any, any>[]> = [T[number]] extends [never]
         ? never
         : { [K in keyof T]: T[K] extends Subscribable.Subscribable<infer A, infer _E, infer _R> ? A : never }
@@ -29,11 +29,11 @@ export declare namespace useSubscribables {
     }
 }
 
-export const useSubscribables = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
+export const useAll = Effect.fnUntraced(function* <const T extends readonly Subscribable.Subscribable<any, any, any>[]>(
     elements: T,
-    options?: useSubscribables.Options<useSubscribables.Success<NoInfer<T>>>,
+    options?: useAll.Options<useAll.Success<NoInfer<T>>>,
 ): Effect.fn.Return<
-    useSubscribables.Success<T>,
+    useAll.Success<T>,
     [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer E, infer _R> ? E : never,
     [T[number]] extends [never] ? never : T[number] extends Subscribable.Subscribable<infer _A, infer _E, infer R> ? R : never
 > {

@@ -1,22 +1,26 @@
 import { Callout, Flex, Spinner, TextField } from "@radix-ui/themes"
 import { Array, Option, Struct } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
+import type * as React from "react"
 
 
 export declare namespace TextFieldFormInputView {
-    export interface Props extends Omit<TextField.RootProps, "form">, Form.useInput.Options {
-        readonly form: Form.Form<readonly PropertyKey[], any, string>
+    export interface Props<out P extends readonly PropertyKey[], A, ER, EW>
+    extends Omit<TextField.RootProps, "form">, Form.useInput.Options {
+        readonly form: Form.Form<P, A, string, ER, EW>
     }
+
+    export type Signature = <P extends readonly PropertyKey[], A, ER, EW>(props: Props<P, A, ER, EW>) => React.ReactNode
 }
 
-export class TextFieldFormInputView extends Component.make("TextFieldFormInputView")(function*(
-    props: TextFieldFormInputView.Props
+export const TextFieldFormInputView = Component.make("TextFieldFormInputView")(function*(
+    props: TextFieldFormInputView.Props<readonly PropertyKey[], any, any, any>
 ) {
     const input = yield* Form.useInput(props.form, props)
-    const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
+    const [issues, isValidating, isCommitting] = yield* Subscribable.useAll([
         props.form.issues,
         props.form.isValidating,
-        props.form.isSubmitting,
+        props.form.isCommitting,
     ])
 
     return (
@@ -24,7 +28,7 @@ export class TextFieldFormInputView extends Component.make("TextFieldFormInputVi
             <TextField.Root
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
-                disabled={isSubmitting}
+                disabled={isCommitting}
                 {...Struct.omit(props, "form")}
             >
                 {isValidating &&
@@ -47,4 +51,6 @@ export class TextFieldFormInputView extends Component.make("TextFieldFormInputVi
             })}
         </Flex>
     )
-}) {}
+}).pipe(
+    Component.withSignature<TextFieldFormInputView.Signature>()
+)

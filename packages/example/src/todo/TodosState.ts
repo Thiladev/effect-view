@@ -1,7 +1,7 @@
 import { KeyValueStore } from "@effect/platform"
 import { BrowserKeyValueStore } from "@effect/platform-browser"
 import { Chunk, Console, Effect, Option, Schema, Stream, SubscriptionRef } from "effect"
-import { Subscribable, SubscriptionSubRef } from "effect-fc"
+import { Lens, Subscribable } from "effect-fc"
 import { Todo } from "@/domain"
 
 
@@ -30,27 +30,29 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
                 : kv.remove(key)
         )
 
-        const ref = yield* SubscriptionRef.make(yield* readFromLocalStorage)
-        yield* Effect.forkScoped(ref.changes.pipe(
+        const lens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(yield* readFromLocalStorage))
+        yield* Effect.forkScoped(lens.changes.pipe(
             Stream.debounce("500 millis"),
             Stream.runForEach(saveToLocalStorage),
         ))
-        yield* Effect.addFinalizer(() => ref.pipe(
+        yield* Effect.addFinalizer(() => Lens.get(lens).pipe(
             Effect.andThen(saveToLocalStorage),
             Effect.ignore,
         ))
 
-        const sizeSubscribable = Subscribable.make({
-            get: Effect.andThen(ref, Chunk.size),
-            get changes() { return Stream.map(ref.changes, Chunk.size) },
-        })
-        const getElementRef = (id: string) => SubscriptionSubRef.makeFromChunkFindFirst(ref, v => v.id === id)
-        const getIndexSubscribable = (id: string) => Subscribable.make({
-            get: Effect.flatMap(ref, Chunk.findFirstIndex(v => v.id === id)),
-            get changes() { return Stream.flatMap(ref.changes, Chunk.findFirstIndex(v => v.id === id)) },
-        })
+        const sizeSubscribable = Subscribable.map(lens, Chunk.size)
 
-        const moveLeft = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.Do.pipe(
+        const getElementLens = (id: string) => Lens.mapEffect(
+            lens,
+            Chunk.findFirst(v => v.id === id),
+            (a, b) => Effect.flatMap(
+                Chunk.findFirstIndex(a, v => v.id === id),
+                i => Chunk.replaceOption(a, i, b),
+            )
+        )
+        const getIndexSubscribable = (id: string) => Subscribable.mapEffect(lens, Chunk.findFirstIndex(v => v.id === id))
+
+        const moveLeft = (id: string) => Lens.updateEffect(lens, todos => Effect.Do.pipe(
             Effect.bind("index", () => Chunk.findFirstIndex(todos, v => v.id === id)),
             Effect.bind("todo", ({ index }) => Chunk.get(todos, index)),
             Effect.bind("previous", ({ index }) => Chunk.get(todos, index - 1)),
@@ -62,7 +64,7 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
                 : todos
             ),
         ))
-        const moveRight = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.Do.pipe(
+        const moveRight = (id: string) => Lens.updateEffect(lens, todos => Effect.Do.pipe(
             Effect.bind("index", () => Chunk.findFirstIndex(todos, v => v.id === id)),
             Effect.bind("todo", ({ index }) => Chunk.get(todos, index)),
             Effect.bind("next", ({ index }) => Chunk.get(todos, index + 1)),
@@ -74,15 +76,15 @@ export class TodosState extends Effect.Service<TodosState>()("TodosState", {
                 : todos
             ),
         ))
-        const remove = (id: string) => SubscriptionRef.updateEffect(ref, todos => Effect.andThen(
+        const remove = (id: string) => Lens.updateEffect(lens, todos => Effect.andThen(
             Chunk.findFirstIndex(todos, v => v.id === id),
             index => Chunk.remove(todos, index),
         ))
 
         return {
-            ref,
+            lens,
             sizeSubscribable,
-            getElementRef,
+            getElementLens,
             getIndexSubscribable,
             moveLeft,
             moveRight,

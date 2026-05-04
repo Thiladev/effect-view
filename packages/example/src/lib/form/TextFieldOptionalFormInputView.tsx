@@ -1,22 +1,26 @@
 import { Callout, Flex, Spinner, Switch, TextField } from "@radix-ui/themes"
 import { Array, Option, Struct } from "effect"
 import { Component, Form, Subscribable } from "effect-fc"
+import type * as React from "react"
 
 
 export declare namespace TextFieldOptionalFormInputView {
-    export interface Props extends Omit<TextField.RootProps, "form" | "defaultValue">, Form.useOptionalInput.Options<string> {
-        readonly form: Form.Form<readonly PropertyKey[], any, Option.Option<string>>
+    export interface Props<out P extends readonly PropertyKey[], A, ER, EW>
+    extends Omit<TextField.RootProps, "form" | "defaultValue">, Form.useOptionalInput.Options<string> {
+        readonly form: Form.Form<P, A, Option.Option<string>, ER, EW>
     }
+
+    export type Signature = <P extends readonly PropertyKey[], A, ER, EW>(props: Props<P, A, ER, EW>) => React.ReactNode
 }
 
-export class TextFieldOptionalFormInputView extends Component.make("TextFieldOptionalFormInputView")(function*(
-    props: TextFieldOptionalFormInputView.Props
+export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalFormInputView")(function*(
+    props: TextFieldOptionalFormInputView.Props<readonly PropertyKey[], any, any, any>
 ) {
     const input = yield* Form.useOptionalInput(props.form, props)
-    const [issues, isValidating, isSubmitting] = yield* Subscribable.useSubscribables([
+    const [issues, isValidating, isCommitting] = yield* Subscribable.useAll([
         props.form.issues,
         props.form.isValidating,
-        props.form.isSubmitting,
+        props.form.isCommitting,
     ])
 
     return (
@@ -24,7 +28,7 @@ export class TextFieldOptionalFormInputView extends Component.make("TextFieldOpt
             <TextField.Root
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
-                disabled={!input.enabled || isSubmitting}
+                disabled={!input.enabled || isCommitting}
                 {...Struct.omit(props, "form", "defaultValue")}
             >
                 <TextField.Slot side="left">
@@ -55,4 +59,6 @@ export class TextFieldOptionalFormInputView extends Component.make("TextFieldOpt
             })}
         </Flex>
     )
-}) {}
+}).pipe(
+    Component.withSignature<TextFieldOptionalFormInputView.Signature>()
+)

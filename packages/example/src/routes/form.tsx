@@ -1,11 +1,11 @@
+import { Button, Container, Flex, Text } from "@radix-ui/themes"
+import { createFileRoute } from "@tanstack/react-router"
+import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
+import { Component, Form, SubmittableForm, Subscribable } from "effect-fc"
 import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
 import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
 import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { runtime } from "@/runtime"
-import { Button, Container, Flex, Text } from "@radix-ui/themes"
-import { createFileRoute } from "@tanstack/react-router"
-import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
-import { Component, Form, Subscribable } from "effect-fc"
 
 
 const email = Schema.pattern<typeof Schema.String>(
@@ -41,7 +41,7 @@ const RegisterFormSubmitSchema = Schema.Struct({
 
 class RegisterFormService extends Effect.Service<RegisterFormService>()("RegisterFormService", {
     scoped: Effect.gen(function*() {
-        const form = yield* Form.service({
+        const form = yield* SubmittableForm.service({
             schema: RegisterFormSchema.pipe(
                 Schema.compose(
                     Schema.transformOrFail(
@@ -64,17 +64,17 @@ class RegisterFormService extends Effect.Service<RegisterFormService>()("Registe
 
         return {
             form,
-            emailField: Form.focusObjectField(form, "email"),
-            passwordField: Form.focusObjectField(form, "password"),
-            birthField: Form.focusObjectField(form, "birth"),
+            emailField: Form.focusObjectOn(form, "email"),
+            passwordField: Form.focusObjectOn(form, "password"),
+            birthField: Form.focusObjectOn(form, "birth"),
         } as const
     })
 }) {}
 
 class RegisterFormView extends Component.make("RegisterFormView")(function*() {
     const form = yield* RegisterFormService
-    const [canSubmit, submitResult] = yield* Subscribable.useSubscribables([
-        form.form.canSubmit,
+    const [canCommit, submitResult] = yield* Subscribable.useAll([
+        form.form.canCommit,
         form.form.mutation.result,
     ])
 
@@ -111,7 +111,7 @@ class RegisterFormView extends Component.make("RegisterFormView")(function*() {
                         defaultValue=""
                     />
 
-                    <Button disabled={!canSubmit}>Submit</Button>
+                    <Button disabled={!canCommit}>Submit</Button>
                 </Flex>
             </form>
 

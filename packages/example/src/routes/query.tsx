@@ -1,8 +1,8 @@
 import { HttpClient, type HttpClientError } from "@effect/platform"
 import { Button, Container, Flex, Heading, Slider, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Array, Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream } from "effect"
-import { Component, ErrorObserver, Mutation, Query, Result, Subscribable, SubscriptionRef } from "effect-fc"
+import { Array, Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream, SubscriptionRef } from "effect"
+import { Component, ErrorObserver, Lens, Mutation, Query, Result, Subscribable } from "effect-fc"
 import { runtime } from "@/runtime"
 
 
@@ -16,9 +16,9 @@ const Post = Schema.Struct({
 const ResultView = Component.make("ResultView")(function*() {
     const runPromise = yield* Component.useRunPromise()
 
-    const [idRef, query, mutation] = yield* Component.useOnMount(() => Effect.gen(function*() {
-        const idRef = yield* SubscriptionRef.make(1)
-        const key = Stream.map(idRef.changes, id => [id] as const)
+    const [idLens, query, mutation] = yield* Component.useOnMount(() => Effect.gen(function*() {
+        const idLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(1))
+        const key = Stream.map(idLens.changes, id => [id] as const)
 
         const query = yield* Query.service({
             key,
@@ -40,11 +40,11 @@ const ResultView = Component.make("ResultView")(function*() {
             ),
         })
 
-        return [idRef, query, mutation] as const
+        return [idLens, query, mutation] as const
     }))
 
-    const [id, setId] = yield* SubscriptionRef.useSubscriptionRefState(idRef)
-    const [queryResult, mutationResult] = yield* Subscribable.useSubscribables([query.result, mutation.result])
+    const [id, setId] = yield* Lens.useState(idLens)
+    const [queryResult, mutationResult] = yield* Subscribable.useAll([query.result, mutation.result])
 
     yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
         Effect.andThen(observer => observer.subscribe),
@@ -105,7 +105,7 @@ const ResultView = Component.make("ResultView")(function*() {
                 </div>
 
                 <Flex direction="row" justify="center" align="center" gap="1">
-                    <Button onClick={() => runPromise(Effect.andThen(idRef, id => mutation.mutate([id])))}>Mutate</Button>
+                    <Button onClick={() => runPromise(Effect.andThen(Lens.get(idLens), id => mutation.mutate([id])))}>Mutate</Button>
                 </Flex>
             </Flex>
         </Container>

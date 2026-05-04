@@ -3,7 +3,7 @@ import type * as React from "react"
 import * as Component from "./Component.js"
 
 
-export const usePubSubFromReactiveValues = Effect.fnUntraced(function* <const A extends React.DependencyList>(
+export const useFromReactiveValues = Effect.fnUntraced(function* <const A extends React.DependencyList>(
     values: A
 ): Effect.fn.Return<PubSub.PubSub<A>, never, Scope.Scope> {
     const pubsub = yield* Component.useOnMount(() => Effect.acquireRelease(PubSub.unbounded<A>(), PubSub.shutdown))

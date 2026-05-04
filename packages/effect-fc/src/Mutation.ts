@@ -99,7 +99,9 @@ extends Pipeable.Class() implements Mutation<K, A, E, R, P> {
     }
 }
 
+
 export const isMutation = (u: unknown): u is Mutation<readonly unknown[], unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, MutationTypeId)
+
 
 export declare namespace make {
     export interface Options<K extends Mutation.AnyKey = never, A = void, E = never, R = never, P = never> {

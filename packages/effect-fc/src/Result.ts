@@ -1,4 +1,4 @@
-import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, pipe, Pipeable, Predicate, PubSub, Ref, type Scope, Stream, type Subscribable, SynchronizedRef } from "effect"
+import { Cause, Context, Data, Effect, Equal, Exit, type Fiber, Hash, Layer, Match, Pipeable, Predicate, PubSub, pipe, Ref, type Scope, Stream, type Subscribable, SynchronizedRef } from "effect"
 import { Lens } from "effect-lens"
 
 

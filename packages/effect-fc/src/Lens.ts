@@ -1,9 +1,8 @@
-import { Effect, Equivalence, Stream } from "effect"
+import { Effect, Equivalence, Stream, SubscriptionRef } from "effect"
 import { Lens } from "effect-lens"
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as SetStateAction from "./SetStateAction.js"
-import * as SubscriptionRef from "./SubscriptionRef.js"
 
 
 export * from "effect-lens/Lens"
@@ -38,15 +37,15 @@ export const useState = Effect.fnUntraced(function* <A, ER, EW, RR, RW>(
     return [reactStateValue, setValue]
 })
 
-export declare namespace useFromState {
+export declare namespace useFromReactState {
     export interface Options<A> {
         readonly equivalence?: Equivalence.Equivalence<A>
     }
 }
 
-export const useFromState = Effect.fnUntraced(function* <A>(
+export const useFromReactState = Effect.fnUntraced(function* <A>(
     [value, setValue]: readonly [A, React.Dispatch<React.SetStateAction<A>>],
-    options?: useFromState.Options<NoInfer<A>>,
+    options?: useFromReactState.Options<NoInfer<A>>,
 ): Effect.fn.Return<Lens.Lens<A, never, never, never, never>> {
     const lens = yield* Component.useOnMount(() => Effect.map(
         SubscriptionRef.make(value),

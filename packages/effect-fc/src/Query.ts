@@ -266,7 +266,9 @@ extends Pipeable.Class() implements Query<K, A, KE, KR, E, R, P> {
     }
 }
 
+
 export const isQuery = (u: unknown): u is Query<readonly unknown[], unknown> => Predicate.hasProperty(u, QueryTypeId)
+
 
 export declare namespace make {
     export interface Options<K extends Query.AnyKey, A, KE = never, KR = never, E = never, R = never, P = never> {

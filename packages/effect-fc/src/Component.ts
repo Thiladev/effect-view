@@ -500,6 +500,31 @@ export const makeUntraced: (
         )
 )
 
+export declare namespace withSignature {
+    export type Signature = (props: any) => React.ReactNode
+
+    export type Result<
+        T extends Component<any, any, any, any>,
+        F extends Signature,
+    > = Omit<T, "use" | "asFunctionComponent"> & {
+        readonly use: Effect.Effect<F, never, Exclude<Component.Context<T>, Scope.Scope>>
+        asFunctionComponent(
+            runtimeRef: React.Ref<Runtime.Runtime<Exclude<Component.Context<T>, Scope.Scope>>>
+        ): F
+    }
+}
+
+export const withSignature: {
+    <F extends withSignature.Signature>(): <T extends Component<any, any, any, any>>(
+        self: T
+    ) => withSignature.Result<T, F>
+    <F extends withSignature.Signature, T extends Component<any, any, any, any>>(
+        self: T
+    ): withSignature.Result<T, F>
+} = (self?: Component<any, any, any, any>): any => self === undefined
+    ? identity
+    : self
+
 /**
  * Creates a new component with modified configuration options while preserving all original behavior.
  *

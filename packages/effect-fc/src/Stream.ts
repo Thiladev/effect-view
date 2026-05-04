@@ -3,7 +3,7 @@ import * as React from "react"
 import * as Component from "./Component.js"
 
 
-export const useStream: {
+export const use: {
     <A, E, R>(
         stream: Stream.Stream<A, E, R>
     ): Effect.Effect<Option.Option<A>, never, R>

@@ -1,11 +1,8 @@
-import { Array, Cause, Chunk, type Context, type Duration, Effect, Equal, Exit, Fiber, Function, identity, Option, ParseResult, Pipeable, Predicate, Schema, type Scope, Stream } from "effect"
+import { Array, type Cause, Chunk, type Duration, Effect, Equal, Function, identity, Option, type ParseResult, Pipeable, Predicate, type Scope, Stream, SubscriptionRef } from "effect"
 import type * as React from "react"
 import * as Component from "./Component.js"
 import * as Lens from "./Lens.js"
-import * as Mutation from "./Mutation.js"
-import * as Result from "./Result.js"
 import * as Subscribable from "./Subscribable.js"
-import * as SubscriptionRef from "./SubscriptionRef.js"
 
 
 export const FormTypeId: unique symbol = Symbol.for("@effect-fc/Form/Form")
@@ -20,8 +17,8 @@ extends Pipeable.Pipeable {
     readonly encodedValue: Lens.Lens<I, ER, EW, never, never>
     readonly issues: Subscribable.Subscribable<readonly ParseResult.ArrayFormatterIssue[], never, never>
     readonly isValidating: Subscribable.Subscribable<boolean, ER, never>
-    readonly canSubmit: Subscribable.Subscribable<boolean, never, never>
-    readonly isSubmitting: Subscribable.Subscribable<boolean, never, never>
+    readonly canCommit: Subscribable.Subscribable<boolean, never, never>
+    readonly isCommitting: Subscribable.Subscribable<boolean, never, never>
 }
 
 export class FormImpl<out P extends readonly PropertyKey[], in out A, in out I = A, in out ER = never, in out EW = never>
@@ -34,209 +31,15 @@ extends Pipeable.Class() implements Form<P, A, I, ER, EW> {
         readonly encodedValue: Lens.Lens<I, ER, EW, never, never>,
         readonly issues: Subscribable.Subscribable<readonly ParseResult.ArrayFormatterIssue[], never, never>,
         readonly isValidating: Subscribable.Subscribable<boolean, never, never>,
-        readonly canSubmit: Subscribable.Subscribable<boolean, never, never>,
-        readonly isSubmitting: Subscribable.Subscribable<boolean, never, never>,
+        readonly canCommit: Subscribable.Subscribable<boolean, never, never>,
+        readonly isCommitting: Subscribable.Subscribable<boolean, never, never>,
     ) {
         super()
-    }
-}
-
-
-export const RootFormTypeId: unique symbol = Symbol.for("@effect-fc/Form/RootForm")
-export type RootFormTypeId = typeof RootFormTypeId
-
-export interface RootForm<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
-extends Form<readonly [], A, I, never, never> {
-    readonly schema: Schema.Schema<A, I, R>
-    readonly context: Context.Context<Scope.Scope | R>
-    readonly mutation: Mutation.Mutation<
-        readonly [value: A, form: RootForm<A, I, R, unknown, unknown, unknown>],
-        MA, ME, MR, MP
-    >
-    readonly autosubmit: boolean
-
-    readonly validationFiber: Subscribable.Subscribable<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>, never, never>
-
-    readonly run: Effect.Effect<void>
-    readonly submit: Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException>
-}
-
-export class RootFormImpl<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
-extends Pipeable.Class() implements RootForm<A, I, R, MA, ME, MR, MP> {
-    readonly [FormTypeId]: FormTypeId = FormTypeId
-    readonly [RootFormTypeId]: RootFormTypeId = RootFormTypeId
-
-    readonly path = [] as const
-
-    constructor(
-        readonly schema: Schema.Schema<A, I, R>,
-        readonly context: Context.Context<Scope.Scope | R>,
-        readonly mutation: Mutation.Mutation<
-            readonly [value: A, form: RootForm<A, I, R, unknown, unknown, unknown>],
-            MA, ME, MR, MP
-        >,
-        readonly autosubmit: boolean,
-
-        readonly value: Lens.Lens<Option.Option<A>, never, never, never, never>,
-        readonly encodedValue: Lens.Lens<I, never, never, never, never>,
-        readonly issues: Lens.Lens<readonly ParseResult.ArrayFormatterIssue[], never, never, never, never>,
-        readonly validationFiber: Lens.Lens<Option.Option<Fiber.Fiber<A, ParseResult.ParseError>>, never, never, never, never>,
-        readonly isValidating: Subscribable.Subscribable<boolean, never, never>,
-
-        readonly canSubmit: Subscribable.Subscribable<boolean, never, never>,
-        readonly isSubmitting: Subscribable.Subscribable<boolean, never, never>,
-
-        readonly runSemaphore: Effect.Semaphore,
-    ) {
-        super()
-    }
-
-    get run(): Effect.Effect<void> {
-        return this.runSemaphore.withPermits(1)(Stream.runForEach(
-            this.encodedValue.changes,
-
-            encodedValue => Lens.get(this.validationFiber).pipe(
-                Effect.andThen(Option.match({
-                    onSome: Fiber.interrupt,
-                    onNone: () => Effect.void,
-                })),
-                Effect.andThen(
-                    Effect.forkScoped(Effect.onExit(
-                        Schema.decode(this.schema, { errors: "all" })(encodedValue),
-                        exit => Effect.andThen(
-                            Exit.matchEffect(exit, {
-                                onSuccess: v => Effect.andThen(
-                                    Lens.set(this.value, Option.some(v)),
-                                    Lens.set(this.issues, Array.empty()),
-                                ),
-                                onFailure: c => Option.match(Chunk.findFirst(Cause.failures(c), e => e._tag === "ParseError"), {
-                                    onSome: e => Effect.flatMap(
-                                        ParseResult.ArrayFormatter.formatError(e),
-                                        v => Lens.set(this.issues, v),
-                                    ),
-                                    onNone: () => Effect.void,
-                                }),
-                            }),
-                            Lens.set(this.validationFiber, Option.none()),
-                        ),
-                    )).pipe(
-                        Effect.tap(fiber => Lens.set(this.validationFiber, Option.some(fiber))),
-                        Effect.andThen(Fiber.join),
-                        Effect.andThen(value => this.autosubmit
-                            ? Effect.asVoid(Effect.forkScoped(this.submitValue(value)))
-                            : Effect.void
-                        ),
-                        Effect.forkScoped,
-                    )
-                ),
-                Effect.provide(this.context),
-            ),
-        ))
-    }
-
-    get submit(): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>, Cause.NoSuchElementException> {
-        return Lens.get(this.value).pipe(
-            Effect.andThen(identity),
-            Effect.andThen(value => this.submitValue(value)),
-        )
-    }
-
-    submitValue(value: A): Effect.Effect<Option.Option<Result.Final<MA, ME, MP>>> {
-        return Effect.whenEffect(
-            Effect.tap(
-                this.mutation.mutate([value, this as any]),
-                result => Result.isFailure(result)
-                    ? Option.match(
-                        Chunk.findFirst(
-                            Cause.failures(result.cause as Cause.Cause<ParseResult.ParseError>),
-                            e => e._tag === "ParseError",
-                        ),
-                        {
-                            onSome: e => Effect.flatMap(
-                                ParseResult.ArrayFormatter.formatError(e),
-                                v => Lens.set(this.issues, v),
-                            ),
-                            onNone: () => Effect.void,
-                        },
-                    )
-                    : Effect.void
-            ),
-            this.canSubmit.get,
-        )
     }
 }
 
 
 export const isForm = (u: unknown): u is Form<readonly PropertyKey[], unknown, unknown> => Predicate.hasProperty(u, FormTypeId)
-export const isRootForm = (u: unknown): u is RootForm<readonly PropertyKey[], unknown, unknown, unknown, unknown, unknown, unknown> => Predicate.hasProperty(u, RootFormTypeId)
-
-
-export declare namespace make {
-    export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
-    extends Mutation.make.Options<
-        readonly [value: NoInfer<A>, form: RootForm<NoInfer<A>, NoInfer<I>, NoInfer<R>, unknown, unknown, unknown>],
-        MA, ME, MR, MP
-    > {
-        readonly schema: Schema.Schema<A, I, R>
-        readonly initialEncodedValue: NoInfer<I>
-        readonly autosubmit?: boolean
-    }
-}
-
-export const make = Effect.fnUntraced(function* <A, I = A, R = never, MA = void, ME = never, MR = never, MP = never>(
-    options: make.Options<A, I, R, MA, ME, MR, MP>
-): Effect.fn.Return<
-    RootForm<A, I, R, MA, ME, Result.forkEffect.OutputContext<MR, MP>, MP>,
-    never,
-    Scope.Scope | R | Result.forkEffect.OutputContext<MR, MP>
-> {
-    const mutation = yield* Mutation.make(options)
-    const valueLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<A>()))
-    const issuesLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make<readonly ParseResult.ArrayFormatterIssue[]>(Array.empty()))
-    const validationFiberLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, ParseResult.ParseError>>()))
-
-    return new RootFormImpl(
-        options.schema,
-        yield* Effect.context<Scope.Scope | R>(),
-        mutation,
-        options.autosubmit ?? false,
-
-        valueLens,
-        Lens.fromSubscriptionRef(yield* SubscriptionRef.make(options.initialEncodedValue)),
-        issuesLens,
-        validationFiberLens,
-        Subscribable.map(validationFiberLens, Option.isSome),
-
-        Subscribable.map(
-            Subscribable.zipLatestAll(valueLens, issuesLens, validationFiberLens, mutation.result),
-            ([value, issues, validationFiber, result]) => (
-                Option.isSome(value) &&
-                Array.isEmptyReadonlyArray(issues) &&
-                Option.isNone(validationFiber) &&
-                !(Result.isRunning(result) || Result.hasRefreshingFlag(result))
-            ),
-        ),
-        Subscribable.map(mutation.result, result => Result.isRunning(result) || Result.hasRefreshingFlag(result)),
-
-        yield* Effect.makeSemaphore(1),
-    )
-})
-
-export declare namespace service {
-    export interface Options<in out A, in out I = A, in out R = never, in out MA = void, in out ME = never, in out MR = never, in out MP = never>
-    extends make.Options<A, I, R, MA, ME, MR, MP> {}
-}
-
-export const service = <A, I = A, R = never, MA = void, ME = never, MR = never, MP = never>(
-    options: service.Options<A, I, R, MA, ME, MR, MP>
-): Effect.Effect<
-    RootForm<A, I, R, MA, ME, Result.forkEffect.OutputContext<MR, MP>, MP>,
-    never,
-    Scope.Scope | R | Result.forkEffect.OutputContext<MR, MP>
-> => Effect.tap(
-    make(options),
-    form => Effect.forkScoped(form.run),
-)
 
 
 const filterIssuesByPath = (
@@ -246,7 +49,7 @@ const filterIssuesByPath = (
     issue.path.length >= path.length && Array.every(path, (p, i) => p === issue.path[i])
 )
 
-export const focusObjectField: {
+export const focusObjectOn: {
     <P extends readonly PropertyKey[], A extends object, I extends object, ER, EW, K extends keyof A & keyof I>(
         self: Form<P, A, I, ER, EW>,
         key: K,
@@ -264,11 +67,11 @@ export const focusObjectField: {
     return new FormImpl(
         path,
         Subscribable.mapOption(form.value, a => a[key]),
-        Lens.focusObjectField(form.encodedValue, key),
+        Lens.focusObjectOn(form.encodedValue, key),
         Subscribable.map(form.issues, issues => filterIssuesByPath(issues, path)),
         form.isValidating,
-        form.canSubmit,
-        form.isSubmitting,
+        form.canCommit,
+        form.isCommitting,
     )
 })
 
@@ -293,8 +96,8 @@ export const focusArrayAt: {
         Lens.focusArrayAt(form.encodedValue, index),
         Subscribable.map(form.issues, issues => filterIssuesByPath(issues, path)),
         form.isValidating,
-        form.canSubmit,
-        form.isSubmitting,
+        form.canCommit,
+        form.isCommitting,
     )
 })
 
@@ -319,8 +122,8 @@ export const focusTupleAt: {
         Lens.focusTupleAt(form.encodedValue, index),
         Subscribable.map(form.issues, issues => filterIssuesByPath(issues, path)),
         form.isValidating,
-        form.canSubmit,
-        form.isSubmitting,
+        form.canCommit,
+        form.isCommitting,
     )
 })
 
@@ -345,8 +148,8 @@ export const focusChunkAt: {
         Lens.focusChunkAt(form.encodedValue, index),
         Subscribable.map(form.issues, issues => filterIssuesByPath(issues, path)),
         form.isValidating,
-        form.canSubmit,
-        form.isSubmitting,
+        form.canCommit,
+        form.isCommitting,
     )
 })
 
@@ -389,7 +192,7 @@ export const useInput = Effect.fnUntraced(function* <P extends readonly Property
                 ),
                 internalValue => Lens.set(form.encodedValue, internalValue),
             ),
-        ], { concurrency: "unbounded" }))
+        ], { concurrency: "unbounded", discard: true }))
 
         return internalValueLens
     }), [form, options?.debounce])
