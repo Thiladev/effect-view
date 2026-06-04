@@ -53,27 +53,21 @@ extends Pipeable.Class() implements SubmittableForm<A, I, R, MA, ME, MR, MP> {
     ) {
         super()
 
-        this.encodedValue = Effect.succeed(this).pipe(
-            Effect.map(self => Lens.make<I, never, never, never, never>({
-                get get() { return self.internalEncodedValue.get },
-                get changes() { return self.internalEncodedValue.changes },
-                modify: f => self.internalEncodedValue.modify(
-                    encodedValue => Effect.map(
-                        f(encodedValue),
-                        ([b, nextEncodedValue]) => [
-                            [b, nextEncodedValue] as const,
-                            nextEncodedValue,
-                        ] as const,
-                    )
-                ).pipe(
-                    Effect.tap(([, nextEncodedValue]) =>
-                        self.synchronizeEncodedValue(nextEncodedValue).pipe(
-                            Effect.forkScoped,
-                            Effect.provide(self.context),
-                        )
+        this.encodedValue = Effect.all([
+            Effect.succeed(this),
+            Effect.succeed(Lens.asLensImpl(this.internalEncodedValue)),
+        ]).pipe(
+            Effect.map(([self, parent]) => Lens.make({
+                get: parent.get,
+                get changes() { return parent.changes },
+                commit: a => Effect.andThen(
+                    Effect.flatMap(
+                        parent.resolve,
+                        resolved => resolved.commit(Effect.succeed(a)),
                     ),
-                    Effect.map(([b]) => b),
+                    self.synchronizeEncodedValue(a),
                 ),
+                lock: parent.lock,
             })),
             Lens.unwrap,
         )

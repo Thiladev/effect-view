@@ -15,7 +15,7 @@ export interface SynchronizedForm<
     in out TEW = never,
     in out TRR = never,
     in out TRW = never,
-> extends Form.Form<readonly [], A, I, TER, TEW> {
+> extends Form.Form<readonly [], A, I, TER, TER | TEW> {
     readonly [SynchronizedFormTypeId]: SynchronizedFormTypeId
 
     readonly schema: Schema.Schema<A, I, R>
@@ -41,7 +41,7 @@ export class SynchronizedFormImpl<
     readonly path = [] as const
 
     readonly value: Subscribable.Subscribable<Option.Option<A>, never, never>
-    readonly encodedValue: Lens.Lens<I, TER, TEW, never, never>
+    readonly encodedValue: Lens.Lens<I, TER, TER | TEW, never, never>
     readonly isValidating: Subscribable.Subscribable<boolean, never, never>
     readonly canCommit: Subscribable.Subscribable<boolean, never, never>
 
@@ -61,7 +61,7 @@ export class SynchronizedFormImpl<
 
         this.value = Effect.succeed(this).pipe(
             Effect.map(self => Subscribable.make({
-                get get() { return Effect.provide(Effect.option(self.target.get), self.context) },
+                get: Effect.provide(Effect.option(self.target.get), self.context),
                 get changes() {
                     return Stream.provideContext(
                         self.target.changes.pipe(
@@ -74,22 +74,21 @@ export class SynchronizedFormImpl<
             })),
             Subscribable.unwrap,
         )
-        this.encodedValue = Effect.succeed(this).pipe(
-            Effect.map(self => Lens.make<I, TER, TEW, never, never>({
-                get get() { return self.internalEncodedValue.get },
-                get changes() { return self.internalEncodedValue.changes },
-                modify: f => self.internalEncodedValue.modify(
-                    encodedValue => Effect.map(
-                        f(encodedValue),
-                        ([b, nextEncodedValue]) => [
-                            [b, nextEncodedValue] as const,
-                            nextEncodedValue,
-                        ] as const,
-                    )
-                ).pipe(
-                    Effect.tap(([, nextEncodedValue]) => self.synchronizeEncodedValue(nextEncodedValue)),
-                    Effect.map(([b]) => b),
+        this.encodedValue = Effect.all([
+            Effect.succeed(this),
+            Effect.succeed(Lens.asLensImpl(this.internalEncodedValue)),
+        ]).pipe(
+            Effect.map(([self, parent]) => Lens.make<I, TER, TER | TEW, never, never>({
+                get: parent.get,
+                get changes() { return parent.changes },
+                commit: a => Effect.andThen(
+                    Effect.flatMap(
+                        parent.resolve,
+                        resolved => resolved.commit(Effect.succeed(a)),
+                    ),
+                    self.synchronizeEncodedValue(a),
                 ),
+                lock: parent.lock,
             })),
             Lens.unwrap,
         )

@@ -37,8 +37,8 @@ export type AsyncProps = Omit<React.SuspenseProps, "children">
 export const AsyncPrototype: AsyncPrototype = Object.freeze({
     [AsyncTypeId]: AsyncTypeId,
 
-    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
-        this: Component.Component<P, A, E, R> & Async,
+    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R, F extends Component.Component.Signature>(
+        this: Component.Component<P, A, E, R, F> & Async,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
         const Inner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
@@ -106,7 +106,7 @@ export const isAsync = (u: unknown): u is Async => Predicate.hasProperty(u, Asyn
  * )
  * ```
  */
-export const async = <T extends Component.Component<any, any, any, any>>(
+export const async = <T extends Component.Component.Any>(
     self: T & (
         "promise" extends keyof Component.Component.Props<T>
             ? "The 'promise' prop name is restricted for Async components. Please rename the 'promise' prop to something else."
@@ -118,7 +118,8 @@ export const async = <T extends Component.Component<any, any, any, any>>(
         Component.Component.Props<T> & AsyncProps,
         Component.Component.Success<T>,
         Component.Component.Error<T>,
-        Component.Component.Context<T>
+        Component.Component.Context<T>,
+        Component.Component.DefaultSignature<Component.Component.Props<T> & AsyncProps, Component.Component.Success<T>>
     >
     & Async
 ) => Object.setPrototypeOf(
@@ -154,14 +155,14 @@ export const async = <T extends Component.Component<any, any, any, any>>(
  * ```
  */
 export const withOptions: {
-    <T extends Component.Component<any, any, any, any> & Async>(
+    <T extends Component.Component.Any & Async>(
         options: Partial<AsyncOptions>
     ): (self: T) => T
-    <T extends Component.Component<any, any, any, any> & Async>(
+    <T extends Component.Component.Any & Async>(
         self: T,
         options: Partial<AsyncOptions>,
     ): T
-} = Function.dual(2, <T extends Component.Component<any, any, any, any> & Async>(
+} = Function.dual(2, <T extends Component.Component.Any & Async>(
     self: T,
     options: Partial<AsyncOptions>,
 ): T => Object.setPrototypeOf(

@@ -212,24 +212,24 @@ export const unsafeForkEffect = Effect.fnUntraced(function* <A, E, R, P = never>
     never,
     Scope.Scope | unsafeForkEffect.OutputContext<R, P>
 > {
-    const ref = yield* SynchronizedRef.make<Result<A, E, P>>(options?.initial ?? initial<A, E, P>())
+    const ref = (yield* SynchronizedRef.make(
+        options?.initial ?? initial<A, E, P>()
+    )) as Lens.SynchronizedRefLensImpl.SynchronizedRefWithInternals<Result<A, E, P>>
     const pubsub = yield* PubSub.unbounded<Result<A, E, P>>()
 
-    const state = Lens.make<Result<A, E, P>, never, never, never, never>({
-        get get() { return Ref.get(ref) },
+    const state = Lens.make({
+        get: Ref.get(ref.ref),
         get changes() {
             return Stream.unwrapScoped(Effect.map(
-                Effect.all([Ref.get(ref), Stream.fromPubSub(pubsub, { scoped: true })]),
+                Effect.all([Ref.get(ref.ref), Stream.fromPubSub(pubsub, { scoped: true })]),
                 ([latest, stream]) => Stream.concat(Stream.make(latest), stream),
             ))
         },
-        modify: f => Ref.get(ref).pipe(
-            Effect.flatMap(f),
-            Effect.flatMap(([b, a]) => Ref.set(ref, a).pipe(
-                Effect.as(b),
-                Effect.zipLeft(PubSub.publish(pubsub, a))
-            )),
+        commit: value => Effect.zipLeft(
+            Ref.set(ref.ref, value),
+            PubSub.publish(pubsub, value),
         ),
+        lock: Effect.succeed(ref.withLock),
     })
 
     const fiber = yield* Effect.gen(function*() {

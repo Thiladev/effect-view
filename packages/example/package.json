@@ -13,17 +13,17 @@
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@tanstack/react-router": "^1.169.1",
-    "@tanstack/react-router-devtools": "^1.166.13",
-    "@tanstack/router-plugin": "^1.167.32",
-    "@types/react": "^19.2.14",
+    "@tanstack/react-router": "^1.170.10",
+    "@tanstack/react-router-devtools": "^1.167.0",
+    "@tanstack/router-plugin": "^1.168.13",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "globals": "^17.6.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "type-fest": "^5.6.0",
-    "vite": "^8.0.10"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "type-fest": "^5.7.0",
+    "vite": "^8.0.16"
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
@@ -35,8 +35,8 @@
     "react-icons": "^5.6.0"
   },
   "overrides": {
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "effect": "^3.21.2",
-    "react": "^19.2.5"
+    "react": "^19.2.6"
   }
 }

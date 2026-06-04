@@ -10,49 +10,52 @@ export type ComponentTypeId = typeof ComponentTypeId
 /**
  * Represents an Effect-based React Component that integrates the Effect system with React.
  */
-export interface Component<P extends {}, A extends React.ReactNode, E, R>
-extends ComponentPrototype<P, A, R>, ComponentOptions {
+export interface Component<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>
+extends ComponentPrototype<R, F>, ComponentOptions {
     new(_: never): Record<string, never>
     readonly [ComponentTypeId]: ComponentTypeId
     readonly "~Props": P
     readonly "~Success": A
     readonly "~Error": E
     readonly "~Context": R
+    readonly "~Function": F
 
     readonly body: (props: P) => Effect.Effect<A, E, R>
 }
 
 export declare namespace Component {
-    export type Props<T extends Component<any, any, any, any>> = [T] extends [Component<infer P, infer _A, infer _E, infer _R>] ? P : never
-    export type Success<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer A, infer _E, infer _R>] ? A : never
-    export type Error<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer _A, infer E, infer _R>] ? E : never
-    export type Context<T extends Component<any, any, any, any>> = [T] extends [Component<infer _P, infer _A, infer _E, infer R>] ? R : never
+    export type Default<P extends {}, A extends React.ReactNode, E, R> = Component<P, A, E, R, DefaultSignature<P, A>>
+    export type Any = Component<any, any, any, any, any>
 
-    export type AsComponent<T extends Component<any, any, any, any>> = Component<Props<T>, Success<T>, Error<T>, Context<T>>
+    export type Signature = (props: any) => React.ReactNode
+    export type DefaultSignature<P extends {}, A extends React.ReactNode> = (props: P) => A
+
+    export type Props<T extends Any> = [T] extends [Component<infer P, infer _A, infer _E, infer _R, infer _F>] ? P : never
+    export type Success<T extends Any> = [T] extends [Component<infer _P, infer A, infer _E, infer _R, infer _F>] ? A : never
+    export type Error<T extends Any> = [T] extends [Component<infer _P, infer _A, infer E, infer _R, infer _F>] ? E : never
+    export type Context<T extends Any> = [T] extends [Component<infer _P, infer _A, infer _E, infer R, infer _F>] ? R : never
+    export type Function<T extends Any> = [T] extends [Component<infer _P, infer _A, infer _E, infer _R, infer F>] ? F : never
+
+    export type AsComponent<T extends Any> = Component<Props<T>, Success<T>, Error<T>, Context<T>, Function<T>>
 }
 
 
-export interface ComponentPrototype<P extends {}, A extends React.ReactNode, R>
-extends Pipeable.Pipeable {
-    readonly [ComponentTypeId]: ComponentTypeId
-    readonly use: Effect.Effect<(props: P) => A, never, Exclude<R, Scope.Scope>>
+export interface ComponentImpl<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>
+extends Component<P, A, E, R, F>, ComponentImplPrototype<R, F> {}
 
-    asFunctionComponent(
-        runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>
-    ): (props: P) => A
+export interface ComponentImplPrototype<R, F extends Component.Signature> {
+    readonly use: Effect.Effect<F, never, Exclude<R, Scope.Scope>>
 
-    setFunctionComponentName(f: React.FC<P>): void
-    transformFunctionComponent(f: React.FC<P>): React.FC<P>
+    asFunctionComponent(runtimeRef: React.Ref<Runtime.Runtime<Exclude<R, Scope.Scope>>>): F
+    setFunctionComponentName(f: F): void
+    transformFunctionComponent(f: F): F
 }
 
-export const ComponentPrototype: ComponentPrototype<any, any, any> = Object.freeze({
-    [ComponentTypeId]: ComponentTypeId,
-    ...Pipeable.Prototype,
-
+export const ComponentImplPrototype: ComponentImplPrototype<any, any> = Object.freeze({
     get use() { return use(this) },
 
-    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R>(
-        this: Component<P, A, E, R>,
+    asFunctionComponent<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+        this: ComponentImpl<P, A, E, R, F>,
         runtimeRef: React.RefObject<Runtime.Runtime<Exclude<R, Scope.Scope>>>,
     ) {
         return (props: P) => Runtime.runSync(runtimeRef.current)(
@@ -63,8 +66,8 @@ export const ComponentPrototype: ComponentPrototype<any, any, any> = Object.free
         )
     },
 
-    setFunctionComponentName<P extends {}, A extends React.ReactNode, E, R>(
-        this: Component<P, A, E, R>,
+    setFunctionComponentName<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+        this: ComponentImpl<P, A, E, R, F>,
         f: React.FC<P>,
     ) {
         f.displayName = this.displayName ?? "Anonymous"
@@ -73,8 +76,8 @@ export const ComponentPrototype: ComponentPrototype<any, any, any> = Object.free
     transformFunctionComponent: identity,
 } as const)
 
-const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R>(
-    self: Component<P, A, E, R>
+const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+    self: ComponentImpl<P, A, E, R, F>
 ) {
     // biome-ignore lint/style/noNonNullAssertion: React ref initialization
     const runtimeRef = React.useRef<Runtime.Runtime<Exclude<R, Scope.Scope>>>(null!)
@@ -82,7 +85,7 @@ const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode
 
     return yield* React.useState(() => Runtime.runSync(runtimeRef.current)(Effect.cachedFunction(
         (_services: readonly any[]) => Effect.sync(() => {
-            const f: React.FC<P> = self.asFunctionComponent(runtimeRef)
+            const f = self.asFunctionComponent(runtimeRef)
             self.setFunctionComponentName(f)
             return self.transformFunctionComponent(f)
         }),
@@ -91,6 +94,23 @@ const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode
         Context.omit(...self.nonReactiveTags)(runtimeRef.current.context).unsafeMap.values()
     ))
 })
+
+
+export interface ComponentPrototype<R, F extends Component.Signature>
+extends Pipeable.Pipeable {
+    readonly [ComponentTypeId]: ComponentTypeId
+    readonly use: Effect.Effect<F, never, Exclude<R, Scope.Scope>>
+}
+
+export const ComponentPrototype: ComponentPrototype<any, any> = Object.freeze(
+    Object.defineProperties(
+        {
+            [ComponentTypeId]: ComponentTypeId,
+            ...Pipeable.Prototype,
+        },
+        Object.getOwnPropertyDescriptors(ComponentImplPrototype),
+    ) as ComponentPrototype<any, any>
+)
 
 
 export interface ComponentOptions {
@@ -131,13 +151,13 @@ export const defaultOptions: ComponentOptions = {
 }
 
 
-export const isComponent = (u: unknown): u is Component<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, ComponentTypeId)
+export const isComponent = (u: unknown): u is Component.Default<{}, React.ReactNode, unknown, unknown> => Predicate.hasProperty(u, ComponentTypeId)
 
 export declare namespace make {
     export type Gen = {
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A extends React.ReactNode, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>
-        ): Component<
+        ): Component.Default<
             P, A,
             [Eff] extends [never] ? never : [Eff] extends [Utils.YieldWrap<Effect.Effect<infer _A, infer E, infer _R>>] ? E : never,
             [Eff] extends [never] ? never : [Eff] extends [Utils.YieldWrap<Effect.Effect<infer _A, infer _E, infer R>>] ? R : never
@@ -152,7 +172,7 @@ export declare namespace make {
                 >,
                 props: NoInfer<P>,
             ) => B,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<B>>, Effect.Effect.Error<B>, Effect.Effect.Context<B>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<B>>, Effect.Effect.Error<B>, Effect.Effect.Context<B>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -164,7 +184,7 @@ export declare namespace make {
                 props: NoInfer<P>,
             ) => B,
             b: (_: B, props: NoInfer<P>) => C,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<C>>, Effect.Effect.Error<C>, Effect.Effect.Context<C>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<C>>, Effect.Effect.Error<C>, Effect.Effect.Context<C>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -177,7 +197,7 @@ export declare namespace make {
             ) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<D>>, Effect.Effect.Error<D>, Effect.Effect.Context<D>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<D>>, Effect.Effect.Error<D>, Effect.Effect.Context<D>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -191,7 +211,7 @@ export declare namespace make {
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<E>>, Effect.Effect.Error<E>, Effect.Effect.Context<E>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<E>>, Effect.Effect.Error<E>, Effect.Effect.Context<E>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E, F extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -206,7 +226,7 @@ export declare namespace make {
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<F>>, Effect.Effect.Error<F>, Effect.Effect.Context<F>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<F>>, Effect.Effect.Error<F>, Effect.Effect.Context<F>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E, F, G extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -222,7 +242,7 @@ export declare namespace make {
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<G>>, Effect.Effect.Error<G>, Effect.Effect.Context<G>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<G>>, Effect.Effect.Error<G>, Effect.Effect.Context<G>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E, F, G, H extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -239,7 +259,7 @@ export declare namespace make {
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<H>>, Effect.Effect.Error<H>, Effect.Effect.Context<H>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<H>>, Effect.Effect.Error<H>, Effect.Effect.Context<H>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E, F, G, H, I extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -257,7 +277,7 @@ export declare namespace make {
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<I>>, Effect.Effect.Error<I>, Effect.Effect.Context<I>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<I>>, Effect.Effect.Error<I>, Effect.Effect.Context<I>>
         <Eff extends Utils.YieldWrap<Effect.Effect<any, any, any>>, A, B, C, D, E, F, G, H, I, J extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -276,35 +296,35 @@ export declare namespace make {
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
             i: (_: I, props: NoInfer<P>) => J,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<J>>, Effect.Effect.Error<J>, Effect.Effect.Context<J>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<J>>, Effect.Effect.Error<J>, Effect.Effect.Context<J>>
     }
 
     export type NonGen = {
         <Eff extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Eff
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -312,7 +332,7 @@ export declare namespace make {
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -321,7 +341,7 @@ export declare namespace make {
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -331,7 +351,7 @@ export declare namespace make {
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, H, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -342,7 +362,7 @@ export declare namespace make {
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, H, I, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -354,7 +374,7 @@ export declare namespace make {
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
             i: (_: I, props: NoInfer<P>) => Eff,
-        ): Component<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
+        ): Component.Default<P, Effect.Effect.Success<Effect.Effect.AsEffect<Eff>>, Effect.Effect.Error<Eff>, Effect.Effect.Context<Eff>>
     }
 }
 
@@ -501,27 +521,20 @@ export const makeUntraced: (
 )
 
 export declare namespace withSignature {
-    export type Signature = (props: any) => React.ReactNode
-
-    export type Result<
-        T extends Component<any, any, any, any>,
-        F extends Signature,
-    > = Omit<T, "use" | "asFunctionComponent"> & {
-        readonly use: Effect.Effect<F, never, Exclude<Component.Context<T>, Scope.Scope>>
-        asFunctionComponent(
-            runtimeRef: React.Ref<Runtime.Runtime<Exclude<Component.Context<T>, Scope.Scope>>>
-        ): F
-    }
+    export type Result<T extends Component.Any, F extends Component.Signature> = (
+        & Omit<T, keyof Component.AsComponent<T>>
+        & Component<Component.Props<T>, Component.Success<T>, Component.Error<T>, Component.Context<T>, F>
+    )
 }
 
 export const withSignature: {
-    <F extends withSignature.Signature>(): <T extends Component<any, any, any, any>>(
+    <F extends Component.Signature>(): <T extends Component.Any>(
         self: T
     ) => withSignature.Result<T, F>
-    <F extends withSignature.Signature, T extends Component<any, any, any, any>>(
+    <F extends Component.Signature, T extends Component.Any>(
         self: T
     ): withSignature.Result<T, F>
-} = (self?: Component<any, any, any, any>): any => self === undefined
+} = (self?: Component.Any): any => self === undefined
     ? identity
     : self
 
@@ -542,14 +555,14 @@ export const withSignature: {
  * ```
  */
 export const withOptions: {
-    <T extends Component<any, any, any, any>>(
+    <T extends Component.Any>(
         options: Partial<ComponentOptions>
     ): (self: T) => T
-    <T extends Component<any, any, any, any>>(
+    <T extends Component.Any>(
         self: T,
         options: Partial<ComponentOptions>,
     ): T
-} = Function.dual(2, <T extends Component<any, any, any, any>>(
+} = Function.dual(2, <T extends Component.Any>(
     self: T,
     options: Partial<ComponentOptions>,
 ): T => Object.setPrototypeOf(
@@ -595,19 +608,19 @@ export const withOptions: {
  *
  */
 export const withRuntime: {
-    <P extends {}, A extends React.ReactNode, E, R>(
+    <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
         context: React.Context<Runtime.Runtime<R>>,
-    ): (self: Component<P, A, E, Scope.Scope | NoInfer<R>>) => (props: P) => A
-    <P extends {}, A extends React.ReactNode, E, R>(
-        self: Component<P, A, E, Scope.Scope | NoInfer<R>>,
+    ): (self: Component<P, A, E, Scope.Scope | NoInfer<R>, F>) => F
+    <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+        self: Component<P, A, E, Scope.Scope | NoInfer<R>, F>,
         context: React.Context<Runtime.Runtime<R>>,
-    ): (props: P) => A
-} = Function.dual(2, <P extends {}, A extends React.ReactNode, E, R>(
-    self: Component<P, A, E, R>,
+    ): F
+} = Function.dual(2, <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+    self: Component<P, A, E, R, F>,
     context: React.Context<Runtime.Runtime<R>>,
 ) => function WithRuntime(props: P) {
     return React.createElement(
-        Runtime.runSync(React.useContext(context))(self.use),
+        Runtime.runSync(React.useContext(context))(self.use) as React.FC<P>,
         props,
     )
 })

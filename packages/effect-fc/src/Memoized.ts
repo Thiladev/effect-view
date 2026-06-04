@@ -61,7 +61,7 @@ export const isMemoized = (u: unknown): u is Memoized<unknown> => Predicate.hasP
  * )
  * ```
  */
-export const memoized = <T extends Component.Component<any, any, any, any>>(
+export const memoized = <T extends Component.Component.Any>(
     self: T
 ): T & Memoized<Component.Component.Props<T>> => Object.setPrototypeOf(
     Object.assign(function() {}, self),
@@ -96,14 +96,14 @@ export const memoized = <T extends Component.Component<any, any, any, any>>(
  * ```
  */
 export const withOptions: {
-    <T extends Component.Component<any, any, any, any> & Memoized<any>>(
+    <T extends Component.Component.Any & Memoized<any>>(
         options: Partial<MemoizedOptions<Component.Component.Props<T>>>
     ): (self: T) => T
-    <T extends Component.Component<any, any, any, any> & Memoized<any>>(
+    <T extends Component.Component.Any & Memoized<any>>(
         self: T,
         options: Partial<MemoizedOptions<Component.Component.Props<T>>>,
     ): T
-} = Function.dual(2, <T extends Component.Component<any, any, any, any> & Memoized<any>>(
+} = Function.dual(2, <T extends Component.Component.Any & Memoized<any>>(
     self: T,
     options: Partial<MemoizedOptions<Component.Component.Props<T>>>,
 ): T => Object.setPrototypeOf(

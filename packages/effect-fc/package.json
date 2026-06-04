@@ -1,7 +1,7 @@
 {
   "name": "effect-fc",
   "description": "Write React function components with Effect",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "type": "module",
   "files": [
     "./README.md",
@@ -46,6 +46,6 @@
     "react": "^19.2.0"
   },
   "dependencies": {
-    "effect-lens": "^0.1.5"
+    "effect-lens": "^0.2.0"
   }
 }
