@@ -42,7 +42,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            docker.valverde.cloud/${{ gitea.repository }}
+            docker.valverde.cloud/thilawyn/effect-view
           tags: |
             type=ref,event=branch
             type=ref,event=tag
