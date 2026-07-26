@@ -12,16 +12,49 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "22"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Clone repo
         uses: actions/checkout@v6
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
       - name: Lint TypeScript
         run: bun lint:tsc
       - name: Lint Biome
         run: bun lint:biome
+      - name: Test
+        run: bun run test
       - name: Build
         run: bun run build
       - name: Pack
         run: bun pack
+
+      - name: Clean before Docker build
+        run: |
+          bun clean:cache
+          bun clean:dist
+          bun clean:modules
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            docker.valverde.cloud/${{ gitea.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha
+          flavor: |
+            latest=true
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

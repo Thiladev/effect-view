@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "lint:tsc": "tsc --noEmit",
+    "lint:tsc": "tsc -b --noEmit",
     "lint:biome": "biome lint",
     "preview": "vite preview",
     "clean:cache": "rm -rf .turbo node_modules/.tmp node_modules/.vite* .tanstack",

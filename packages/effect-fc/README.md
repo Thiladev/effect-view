@@ -42,7 +42,7 @@ export class TodosView extends Component.make("TodosView")(function*() {
 }) {}
 
 const Index = Component.make("IndexView")(function*() {
-    const context = yield* Component.useContextFromLayer(TodosState.Default)
+    const context = yield* Component.useLayer(TodosState.Default)
     const Todos = yield* Effect.provide(TodosView.use, context)
 
     return <Todos />

@@ -3,9 +3,13 @@
 
   "tasks": {
     "lint:tsc": {
+      "dependsOn": ["^build"],
       "cache": false
     },
     "lint:biome": {
+      "cache": false
+    },
+    "test": {
       "cache": false
     },
     "build": {

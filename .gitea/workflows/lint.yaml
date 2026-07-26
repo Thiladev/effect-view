@@ -16,3 +16,5 @@ jobs:
         run: bun lint:tsc
       - name: Lint Biome
         run: bun lint:biome
+      - name: Test
+        run: bun run test

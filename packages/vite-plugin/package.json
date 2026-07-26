@@ -1,0 +1,47 @@
+{
+  "name": "@effect-view/vite-plugin",
+  "description": "Vite Fast Refresh support for Effect View components",
+  "version": "0.0.1",
+  "type": "module",
+  "files": [
+    "./README.md",
+    "./dist"
+  ],
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/Thiladev/effect-fc.git"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "default": "./dist/runtime.js"
+    }
+  },
+  "scripts": {
+    "lint:tsc": "tsc -b --noEmit",
+    "lint:biome": "biome lint",
+    "test": "vitest run",
+    "build": "tsc -b tsconfig.build.json",
+    "pack": "npm pack",
+    "clean:cache": "rm -rf .turbo *.tsbuildinfo",
+    "clean:dist": "rm -rf dist",
+    "clean:modules": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "effect-fc-next": "workspace:*",
+    "vite": "^8.0.16",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "effect-fc-next": "0.1.0-beta.0",
+    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
+  }
+}

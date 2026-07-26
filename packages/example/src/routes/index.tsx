@@ -11,7 +11,7 @@ const TodosStateLive = TodosState.Default("todos")
 const Index = Component.make("IndexView")(function*() {
     const Todos = yield* Effect.provide(
         TodosView.use,
-        yield* Component.useContextFromLayer(TodosStateLive),
+        yield* Component.useLayer(TodosStateLive),
     )
 
     return <Todos />

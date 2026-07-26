@@ -6,9 +6,10 @@
     "./packages/*"
   ],
   "scripts": {
-    "build": "turbo build",
     "lint:tsc": "turbo lint:tsc",
     "lint:biome": "turbo lint:biome",
+    "test": "turbo test",
+    "build": "turbo build",
     "pack": "turbo pack",
     "clean:cache": "turbo clean:cache",
     "clean:dist": "turbo clean:dist",

@@ -129,7 +129,7 @@ class RegisterFormView extends Component.make("RegisterFormView")(function*() {
 const RegisterPage = Component.make("RegisterPageView")(function*() {
     const RegisterForm = yield* Effect.provide(
         RegisterFormView.use,
-        yield* Component.useContextFromLayer(RegisterFormService.Default),
+        yield* Component.useLayer(RegisterFormService.Default),
     )
 
     return <RegisterForm />

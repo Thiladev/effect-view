@@ -4,5 +4,15 @@
   "extends": "//",
   "files": {
     "includes": ["./src/**"]
+  },
+  "linter": {
+    "rules": {
+      "complexity": {
+        "noImportantStyles": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "off"
+      }
+    }
   }
 }

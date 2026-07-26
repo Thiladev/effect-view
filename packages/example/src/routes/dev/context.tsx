@@ -23,7 +23,7 @@ const SubComponent = Component.makeUntraced("SubComponent")(function*() {
 const ContextView = Component.makeUntraced("ContextView")(function*() {
     const [serviceValue, setServiceValue] = React.useState("test")
     const SubServiceLayer = React.useMemo(() => SubService.Default(serviceValue), [serviceValue])
-    const SubComponentFC = yield* Effect.provide(SubComponent.use, yield* Component.useContextFromLayer(SubServiceLayer))
+    const SubComponentFC = yield* Effect.provide(SubComponent.use, yield* Component.useLayer(SubServiceLayer))
 
     return (
         <Container>

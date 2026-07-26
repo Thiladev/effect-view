@@ -29,16 +29,20 @@
     ]
   },
   "scripts": {
-    "build": "tsc",
-    "lint:tsc": "tsc --noEmit",
+    "lint:tsc": "tsc -b --noEmit",
     "lint:biome": "biome lint",
+    "test": "vitest run",
+    "build": "tsc -b tsconfig.build.json",
     "pack": "npm pack",
-    "clean:cache": "rm -rf .turbo tsconfig.tsbuildinfo",
+    "clean:cache": "rm -rf .turbo *.tsbuildinfo",
     "clean:dist": "rm -rf dist",
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@effect/platform-browser": "^0.76.0"
+    "@effect/platform-browser": "^0.76.0",
+    "@testing-library/react": "^16.3.0",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "@types/react": "^19.2.0",
