@@ -97,15 +97,15 @@
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@effect/platform-browser": "4.0.0-beta.101",
+    "@effect/platform-browser": "4.0.0-beta.102",
     "@testing-library/react": "^16.3.0",
-    "effect": "4.0.0-beta.101",
+    "effect": "4.0.0-beta.102",
     "jsdom": "^26.1.0",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "@types/react": "^19.2.0",
-    "effect": "4.0.0-beta.101",
+    "effect": "4.0.0-beta.102",
     "react": "^19.2.0"
   },
   "dependencies": {
