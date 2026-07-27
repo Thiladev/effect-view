@@ -1,5 +1,5 @@
-import type * as Component from "effect-fc-next/Component"
-import * as Refreshable from "effect-fc-next/Refreshable"
+import type * as Component from "effect-view/Component"
+import * as Refreshable from "effect-view/Refreshable"
 import { describe, expect, it, vi } from "vitest"
 import { accept, register } from "./runtime.js"
 

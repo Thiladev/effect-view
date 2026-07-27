@@ -1,7 +1,7 @@
 import path from "node:path"
 import type { Plugin } from "vite"
 import { describe, expect, it } from "vitest"
-import { effectViewPlugin } from "./index.js"
+import { effectView } from "./index.js"
 
 
 type TransformHook = Extract<
@@ -31,12 +31,12 @@ const runTransform = async (
 const transform = (
     code: string,
     id = path.join(process.cwd(), "src/View.tsx"),
-): Promise<string | undefined> => runTransform(effectViewPlugin(), code, id)
+): Promise<string | undefined> => runTransform(effectView(), code, id)
 
-describe("effectViewPlugin", () => {
+describe("effectView", () => {
     it("wraps a const Effect View descriptor", async () => {
         const result = await transform(`
-import { Component } from "effect-fc-next"
+import { Component } from "effect-view"
 import * as React from "react"
 
 export const CounterView = Component.make("CounterView")(function*() {
@@ -53,7 +53,7 @@ export const CounterView = Component.make("CounterView")(function*() {
 
     it("registers a pipeline before withContext", async () => {
         const result = await transform(`
-import { Component } from "effect-fc-next"
+import { Component } from "effect-view"
 
 const Page = Component.make("Page")(function*() {
     return <main />
@@ -69,7 +69,7 @@ const Page = Component.make("Page")(function*() {
 
     it("wraps a class's complete trait pipeline", async () => {
         const result = await transform(`
-import { Async, Component, Memoized } from "effect-fc-next"
+import { Async, Component, Memoized } from "effect-view"
 
 class PostView extends Component.make("PostView")(function*() {
     const value = yield* Component.useOnMount(load)
@@ -88,7 +88,7 @@ class PostView extends Component.make("PostView")(function*() {
     it("supports aliased Component imports and refresh reset", async () => {
         const result = await transform(`
 // @refresh reset
-import { Component as View } from "effect-fc-next"
+import { Component as View } from "effect-view"
 
 const Probe = View.makeUntraced(function*() {
     return null
@@ -109,11 +109,11 @@ export function View() {
     })
 
     it("keeps instrumenting a module when all Effect Views are removed", async () => {
-        const plugin = effectViewPlugin() as Plugin
+        const plugin = effectView() as Plugin
         const id = path.join(process.cwd(), "src/Removed.tsx")
 
         await runTransform(plugin, `
-import { Component } from "effect-fc-next"
+import { Component } from "effect-view"
 export const Probe = Component.makeUntraced(function*() {
     return null
 })

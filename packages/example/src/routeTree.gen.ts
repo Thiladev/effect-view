@@ -9,33 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ResultRouteImport } from './routes/result'
-import { Route as QueryRouteImport } from './routes/query'
-import { Route as FormRouteImport } from './routes/form'
-import { Route as BlankRouteImport } from './routes/blank'
-import { Route as AsyncRouteImport } from './routes/async'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DevMemoRouteImport } from './routes/dev/memo'
-import { Route as DevContextRouteImport } from './routes/dev/context'
+import { Route as AsyncRouteImport } from './routes/async'
+import { Route as BlankRouteImport } from './routes/blank'
+import { Route as FormRouteImport } from './routes/form'
+import { Route as LensformRouteImport } from './routes/lensform'
+import { Route as QueryRouteImport } from './routes/query'
 
-const ResultRoute = ResultRouteImport.update({
-  id: '/result',
-  path: '/result',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QueryRoute = QueryRouteImport.update({
-  id: '/query',
-  path: '/query',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FormRoute = FormRouteImport.update({
-  id: '/form',
-  path: '/form',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BlankRoute = BlankRouteImport.update({
-  id: '/blank',
-  path: '/blank',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AsyncRoute = AsyncRouteImport.update({
@@ -43,19 +26,24 @@ const AsyncRoute = AsyncRouteImport.update({
   path: '/async',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const BlankRoute = BlankRouteImport.update({
+  id: '/blank',
+  path: '/blank',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DevMemoRoute = DevMemoRouteImport.update({
-  id: '/dev/memo',
-  path: '/dev/memo',
+const FormRoute = FormRouteImport.update({
+  id: '/form',
+  path: '/form',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DevContextRoute = DevContextRouteImport.update({
-  id: '/dev/context',
-  path: '/dev/context',
+const LensformRoute = LensformRouteImport.update({
+  id: '/lensform',
+  path: '/lensform',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QueryRoute = QueryRouteImport.update({
+  id: '/query',
+  path: '/query',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -64,20 +52,16 @@ export interface FileRoutesByFullPath {
   '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
-  '/result': typeof ResultRoute
-  '/dev/context': typeof DevContextRoute
-  '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
-  '/result': typeof ResultRoute
-  '/dev/context': typeof DevContextRoute
-  '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,42 +69,15 @@ export interface FileRoutesById {
   '/async': typeof AsyncRoute
   '/blank': typeof BlankRoute
   '/form': typeof FormRoute
+  '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
-  '/result': typeof ResultRoute
-  '/dev/context': typeof DevContextRoute
-  '/dev/memo': typeof DevMemoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/async'
-    | '/blank'
-    | '/form'
-    | '/query'
-    | '/result'
-    | '/dev/context'
-    | '/dev/memo'
+  fullPaths: '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/async'
-    | '/blank'
-    | '/form'
-    | '/query'
-    | '/result'
-    | '/dev/context'
-    | '/dev/memo'
-  id:
-    | '__root__'
-    | '/'
-    | '/async'
-    | '/blank'
-    | '/form'
-    | '/query'
-    | '/result'
-    | '/dev/context'
-    | '/dev/memo'
+  to: '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
+  id: '__root__' | '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,40 +85,17 @@ export interface RootRouteChildren {
   AsyncRoute: typeof AsyncRoute
   BlankRoute: typeof BlankRoute
   FormRoute: typeof FormRoute
+  LensformRoute: typeof LensformRoute
   QueryRoute: typeof QueryRoute
-  ResultRoute: typeof ResultRoute
-  DevContextRoute: typeof DevContextRoute
-  DevMemoRoute: typeof DevMemoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/result': {
-      id: '/result'
-      path: '/result'
-      fullPath: '/result'
-      preLoaderRoute: typeof ResultRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/query': {
-      id: '/query'
-      path: '/query'
-      fullPath: '/query'
-      preLoaderRoute: typeof QueryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/form': {
-      id: '/form'
-      path: '/form'
-      fullPath: '/form'
-      preLoaderRoute: typeof FormRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/blank': {
-      id: '/blank'
-      path: '/blank'
-      fullPath: '/blank'
-      preLoaderRoute: typeof BlankRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/async': {
@@ -171,25 +105,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AsyncRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/blank': {
+      id: '/blank'
+      path: '/blank'
+      fullPath: '/blank'
+      preLoaderRoute: typeof BlankRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dev/memo': {
-      id: '/dev/memo'
-      path: '/dev/memo'
-      fullPath: '/dev/memo'
-      preLoaderRoute: typeof DevMemoRouteImport
+    '/form': {
+      id: '/form'
+      path: '/form'
+      fullPath: '/form'
+      preLoaderRoute: typeof FormRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dev/context': {
-      id: '/dev/context'
-      path: '/dev/context'
-      fullPath: '/dev/context'
-      preLoaderRoute: typeof DevContextRouteImport
+    '/lensform': {
+      id: '/lensform'
+      path: '/lensform'
+      fullPath: '/lensform'
+      preLoaderRoute: typeof LensformRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/query': {
+      id: '/query'
+      path: '/query'
+      fullPath: '/query'
+      preLoaderRoute: typeof QueryRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -200,10 +141,8 @@ const rootRouteChildren: RootRouteChildren = {
   AsyncRoute: AsyncRoute,
   BlankRoute: BlankRoute,
   FormRoute: FormRoute,
+  LensformRoute: LensformRoute,
   QueryRoute: QueryRoute,
-  ResultRoute: ResultRoute,
-  DevContextRoute: DevContextRoute,
-  DevMemoRoute: DevMemoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

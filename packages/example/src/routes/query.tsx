@@ -1,8 +1,9 @@
-import { HttpClient, type HttpClientError } from "@effect/platform"
 import { Button, Container, Flex, Heading, Slider, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Array, Cause, Chunk, Console, Effect, flow, Match, Option, Schema, Stream, SubscriptionRef } from "effect"
-import { Component, ErrorObserver, Lens, Mutation, Query, Result, Subscribable } from "effect-fc"
+import { Effect, Schema, SubscriptionRef } from "effect"
+import { HttpClient } from "effect/unstable/http"
+import { AsyncResult } from "effect/unstable/reactivity"
+import { Component, Lens, Mutation, Query, View } from "effect-view"
 import { runtime } from "@/runtime"
 
 
@@ -13,30 +14,45 @@ const Post = Schema.Struct({
     body: Schema.String,
 })
 
-const ResultView = Component.make("ResultView")(function*() {
-    const runPromise = yield* Component.useRunPromise()
 
+interface PostResultViewProps {
+    readonly result: AsyncResult.AsyncResult<typeof Post.Type, Error>
+}
+
+const PostResultView = (props: PostResultViewProps) => AsyncResult.match(props.result, {
+    onInitial: result => result.waiting
+        ? <Text>Loading...</Text>
+        : <Text>No data.</Text>,
+    onFailure: result => <Text>Request failed: { result.cause.toString() }</Text>,
+    onSuccess: result => <>
+        {result.waiting && <Text>Refreshing...</Text>}
+        <Heading>{result.value.title}</Heading>
+        <Text>{result.value.body}</Text>
+    </>,
+})
+
+const QueryRouteComponent = Component.make("QueryRouteView")(function*() {
     const [idLens, query, mutation] = yield* Component.useOnMount(() => Effect.gen(function*() {
-        const idLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(1))
-        const key = Stream.map(idLens.changes, id => [id] as const)
+        const keyLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(["post", 1 as number] as const))
+        const idLens = Lens.focusTupleAt(keyLens, 1)
 
         const query = yield* Query.service({
-            key,
-            f: ([id]) => HttpClient.HttpClient.pipe(
-                Effect.tap(Effect.sleep("500 millis")),
+            key: keyLens,
+            f: ([, id]) => HttpClient.HttpClient.pipe(
+                Effect.tap(Effect.sleep("1 second")),
                 Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
                 Effect.andThen(response => response.json),
-                Effect.andThen(Schema.decodeUnknown(Post)),
+                Effect.andThen(Schema.decodeUnknownEffect(Post)),
             ),
             staleTime: "10 seconds",
         })
 
         const mutation = yield* Mutation.make({
-            f: ([id]: readonly [id: number]) => HttpClient.HttpClient.pipe(
-                Effect.tap(Effect.sleep("500 millis")),
+            f: ([id]: [id: number]) => HttpClient.HttpClient.pipe(
+                Effect.tap(Effect.sleep("1 second")),
                 Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
                 Effect.andThen(response => response.json),
-                Effect.andThen(Schema.decodeUnknown(Post)),
+                Effect.andThen(Schema.decodeUnknownEffect(Post)),
             ),
         })
 
@@ -44,74 +60,43 @@ const ResultView = Component.make("ResultView")(function*() {
     }))
 
     const [id, setId] = yield* Lens.useState(idLens)
-    const [queryResult, mutationResult] = yield* Subscribable.useAll([query.result, mutation.result])
+    const [queryState, mutationState] = yield* View.useAll([query.state, mutation.state])
 
-    yield* Component.useOnMount(() => ErrorObserver.ErrorObserver<HttpClientError.HttpClientError>().pipe(
-        Effect.andThen(observer => observer.subscribe),
-        Effect.andThen(Stream.fromQueue),
-        Stream.unwrapScoped,
-        Stream.runForEach(flow(
-            Cause.failures,
-            Chunk.findFirst(e => e._tag === "RequestError" || e._tag === "ResponseError"),
-            Option.match({
-                onSome: e => Console.log("ResultView HttpClient error", e),
-                onNone: () => Effect.void,
-            }),
-        )),
-        Effect.forkScoped,
-    ))
+    const runSync = yield* Component.useRunSync()
 
     return (
         <Container>
             <Flex direction="column" align="center" gap="2">
                 <Slider
                     value={[id]}
-                    onValueChange={flow(Array.head, Option.getOrThrow, setId)}
+                    min={1}
+                    max={10}
+                    onValueChange={([value]) => setId(value ?? 1)}
                 />
 
-                <div>
-                    {Match.value(queryResult).pipe(
-                        Match.tag("Running", () => <Text>Loading...</Text>),
-                        Match.tag("Success", result => <>
-                            <Heading>{result.value.title}</Heading>
-                            <Text>{result.value.body}</Text>
-                            {Result.hasRefreshingFlag(result) && <Text>Refreshing...</Text>}
-                        </>),
-                        Match.tag("Failure", result =>
-                            <Text>An error has occured: {result.cause.toString()}</Text>
-                        ),
-                        Match.orElse(() => <></>),
-                    )}
-                </div>
+                <PostResultView result={queryState.result} />
 
                 <Flex direction="row" justify="center" align="center" gap="1">
-                    <Button onClick={() => runPromise(query.refresh)}>Refresh</Button>
-                    <Button onClick={() => runPromise(query.invalidateCache)}>Invalidate cache</Button>
+                    <Button onClick={() => runSync(query.refreshView)}>
+                        Refresh
+                    </Button>
+                    <Button onClick={() => runSync(query.invalidateCache)}>
+                        Invalidate cache
+                    </Button>
                 </Flex>
 
-                <div>
-                    {Match.value(mutationResult).pipe(
-                        Match.tag("Running", () => <Text>Loading...</Text>),
-                        Match.tag("Success", result => <>
-                            <Heading>{result.value.title}</Heading>
-                            <Text>{result.value.body}</Text>
-                            {Result.hasRefreshingFlag(result) && <Text>Refreshing...</Text>}
-                        </>),
-                        Match.tag("Failure", result =>
-                            <Text>An error has occured: {result.cause.toString()}</Text>
-                        ),
-                        Match.orElse(() => <></>),
-                    )}
-                </div>
+                <PostResultView result={mutationState} />
 
-                <Flex direction="row" justify="center" align="center" gap="1">
-                    <Button onClick={() => runPromise(Effect.andThen(Lens.get(idLens), id => mutation.mutate([id])))}>Mutate</Button>
-                </Flex>
+                <Button onClick={() => runSync(mutation.mutateView([id]))}>
+                    Mutate
+                </Button>
             </Flex>
         </Container>
     )
-})
+}).pipe(
+    Component.withContext(runtime.context),
+)
 
 export const Route = createFileRoute("/query")({
-    component: Component.withRuntime(ResultView, runtime.context)
+    component: QueryRouteComponent,
 })

@@ -35,7 +35,6 @@ application runtime once, alongside the services used by your query effects:
 
 ```tsx title="src/runtime.ts"
 import { Layer } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
 import { QueryClient, ReactRuntime } from "effect-view"
 
 const AppLive = Layer.empty.pipe(
@@ -44,7 +43,6 @@ const AppLive = Layer.empty.pipe(
     defaultRefreshOnWindowFocus: true,
     cacheGcTime: "5 minutes",
   })),
-  Layer.provideMerge(FetchHttpClient.layer),
 )
 
 export const runtime = ReactRuntime.make(AppLive)
@@ -52,13 +50,21 @@ export const runtime = ReactRuntime.make(AppLive)
 
 The client owns the cache and its cleanup lifecycle. Individual queries can
 override `staleTime` and `refreshOnWindowFocus`; otherwise they inherit the
-client defaults.
+client defaults. Window-focus refresh also requires the optional
+`@effect/platform-browser` package, as described under
+[Staleness and cache lifetime](#staleness-and-cache-lifetime).
 
 ## Create a reactive query
 
 A query is driven by a `View` rather than by a value read during one React
 render. Whenever that key changes, `Query.service` checks the cache and starts
 the query effect when necessary.
+
+`Query.service` is an Effect constructor, not a hook. Create each query instance
+once and keep it stable. In a component, the usual place is
+`Component.useOnMount`; a query shared by multiple components can instead be
+owned by an Effect service. Change the existing query's reactive key rather
+than reconstructing the query during render.
 
 ```tsx
 import { Effect, Schema, SubscriptionRef } from "effect"
@@ -118,9 +124,9 @@ Effect equality by default, so structurally equal Effect data types work well
 as query keys. Supply `keyEquivalence` when the key needs different equality
 semantics.
 
-`Query.service` creates the query and starts watching its key in the current
-scope. Creating it in `Component.useOnMount` keeps one query instance—and one
-stable query function identity—for the component's lifetime.
+`Query.service` starts watching its key in the current scope. The
+`Component.useOnMount` call above keeps both the query instance and its query
+function identity stable for the component's lifetime.
 
 ## Render AsyncResult
 
@@ -264,8 +270,17 @@ const query = yield* Query.service({
 })
 ```
 
-Window focus resolves the current key again, subject to the same freshness
-check. The browser integration is ignored in non-browser environments.
+Window-focus refresh depends on the optional `@effect/platform-browser`
+integration. Install it in browser applications that use this behavior:
+
+```bash npm2yarn
+npm install @effect/platform-browser@beta
+```
+
+When the package is available, focusing the window resolves the current key
+again, subject to the same freshness check. Without it,
+`refreshOnWindowFocus` has no effect; the rest of the Query API continues to
+work normally. The integration is also ignored in non-browser environments.
 
 ## The Effect touch
 

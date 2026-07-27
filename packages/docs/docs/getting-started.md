@@ -44,16 +44,16 @@ Effect View components:
 npm install --save-dev @effect-view/vite-plugin
 ```
 
-Add `effectViewPlugin()` before the React plugin in your Vite configuration:
+Add `effectView()` before the React plugin in your Vite configuration:
 
 ```ts title="vite.config.ts"
-import { effectViewPlugin } from "@effect-view/vite-plugin"
+import { effectView } from "@effect-view/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 export default defineConfig({
   plugins: [
-    effectViewPlugin(),
+    effectView(),
     react(),
   ],
 })
@@ -199,51 +199,25 @@ to provide local services to a subtree.
 
 ## Synchronous and asynchronous components
 
-A regular Effect View component runs its body during React render. That Effect
-must complete synchronously: yielding a service, reading synchronous state, or
-creating a scoped object is fine; sleeping, fetching, or awaiting a promise is
-not.
+A regular Effect View component runs its body during React render. Effects
+executed directly by that body—including setup passed to `useOnMount`,
+`useOnChange`, or `useLayer`—must complete synchronously every time they run.
+Yielding services and reading synchronous state is fine; sleeping, fetching, or
+awaiting a promise is not.
 
-Use `Async.async` when render genuinely depends on an asynchronous Effect. The
-component then suspends and accepts React Suspense props such as `fallback`:
+Choose the integration that matches the asynchronous work:
 
-```tsx title="src/UserView.tsx"
-import { Async, Component, Memoized } from "effect-view"
-import { loadUser } from "./api"
-
-export const UserView = Component.make("UserView")(
-  function* (props: { readonly userId: string }) {
-    const user = yield* Component.useOnChange(
-      () => loadUser(props.userId),
-      [props.userId],
-    )
-
-    return <h2>{user.name}</h2>
-  },
-).pipe(
-  Async.async,
-  Async.withOptions({ defaultFallback: <p>Loading user...</p> }),
-  Memoized.memoized,
-)
-```
-
-Use it from an Effect View parent in the usual way:
-
-```tsx
-const User = yield* UserView.use
-
-return <User userId={selectedUserId} />
-```
-
-`Memoized.memoized` prevents an unrelated parent re-render from restarting an
-async child whose props have not changed. A changed `userId` creates a new
-dependency scope, cleans up the previous one, and runs `loadUser` again.
-
-An async component's rejected Effect is handled by the nearest React error
-boundary. Suspense handles waiting, not failures.
-
-For server data that should be cached, refreshed, and shared, prefer the
-[Query module](./query) over a raw async component.
+- Make the component asynchronous with [`Async.async`](./async) when it must
+  wait for a one-off asynchronous Effect before producing JSX. The component
+  suspends while it waits.
+- Use [Query](./query) for server reads that need caching, sharing, refresh, or
+  invalidation.
+- Use [Mutation](./mutation) for user-triggered writes with observable pending
+  and error state.
+- Use `useRunPromise` or `useCallbackPromise` for asynchronous event work that
+  does not need Mutation state.
+- Use a post-commit hook with a scoped fiber for subscriptions or background
+  work tied to the component lifecycle.
 
 ## Use Effect services
 
@@ -321,24 +295,25 @@ const ResourceView = Component.make("Resource")(function* () {
 with the context already available in the component body, so the resource above
 is owned by the component's root scope.
 
-`useOnChange`, `useReactEffect`, and `useReactLayoutEffect` each create a scope
-that can be replaced without closing the component root scope.
+`useOnChange`, `useReactEffect`, and `useReactLayoutEffect` each manage their
+own resources. When their dependencies change, those resources are cleaned up
+and recreated while the rest of the component remains active.
 
 The main lifecycle choices are:
 
 | Hook | What it does | Scope seen by setup | Scope closes when |
 | --- | --- | --- | --- |
 | Component body | Produces the component's rendered value | Component root scope | The component unmounts |
-| `useOnMount` | Computes and caches a value for the component instance | The same component root scope | The component unmounts |
+| `useOnMount` | Computes and caches a value for the component instance | Component root scope | The component unmounts |
 | `useOnChange` | Recomputes a cached value when dependencies change | A new dependency scope | Dependencies change or the component unmounts |
 | `useReactEffect` | Runs a post-commit side effect | A new effect scope | Dependencies change or the component unmounts |
 | `useReactLayoutEffect` | Runs a layout effect before the browser paints | A new layout-effect scope | Dependencies change or the component unmounts |
-| `useLayer` | Builds and provides a layer context | A dependency scope created through `useOnChange` | The layer reference changes or the component unmounts |
+| `useLayer` | Builds and provides a layer context | A new scope tied to the current layer reference | The layer reference changes or the component unmounts |
 
-`useRunSync`, `useRunPromise`, `useCallbackSync`, and `useCallbackPromise` do
-not create lifecycle scopes either. They capture the component context, so an
-Effect invoked through them sees the component root scope unless it explicitly
-provides another one.
+`useRunSync` and `useRunPromise` do not create a new scope. The runner they
+return includes the component root scope in its context by default.
+`useCallbackSync` and `useCallbackPromise` similarly capture the component
+context required by their Effect.
 
 ### useOnMount
 
@@ -435,6 +410,21 @@ return (
 Use `Component.useRunSync` only for Effects known to complete synchronously.
 Use `Component.useRunPromise` for Effects that may suspend, sleep, fetch, or
 otherwise continue asynchronously.
+
+Both runners provide `Scope.Scope` by default, so they can run scoped Effects
+without a type argument. When an Effect also requires application services,
+declare the complete runner context explicitly:
+
+```tsx
+import { Scope } from "effect"
+
+const runPromise = yield* Component.useRunPromise<
+  Scope.Scope | UserRepository
+>()
+```
+
+The resulting runner accepts Effects that require the component scope,
+`UserRepository`, or both.
 
 When a callback is passed to a memoized child or used as a dependency, use the
 callback variants to preserve its identity:

@@ -100,8 +100,8 @@ export default function Home(): ReactNode {
               Effect View for React 19
             </div>
             <h1>
-              React components,
-              <span> powered by Effect.</span>
+              React <span className={styles.unbreakable}>components,</span>
+              <span className={styles.heroAccent}> powered by Effect.</span>
             </h1>
             <p className={styles.lede}>
               Bring typed services, scoped resources, reactive state, server

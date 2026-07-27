@@ -7,7 +7,7 @@ import "../index.css"
 
 
 export const Route = createRootRoute({
-    component: Root
+    component: Root,
 })
 
 function Root() {
@@ -17,6 +17,10 @@ function Root() {
                 <Flex direction="row" justify="center" align="center" gap="2">
                     <Link to="/">Index</Link>
                     <Link to="/blank">Blank</Link>
+                    <Link to="/async">Async</Link>
+                    <Link to="/query">Query</Link>
+                    <Link to="/form">Form</Link>
+                    <Link to="/lensform">LensForm</Link>
                 </Flex>
             </Container>
 

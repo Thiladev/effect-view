@@ -1,30 +1,35 @@
-import { HttpClient } from "@effect/platform"
 import { Container, Flex, Heading, Slider, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Array, Effect, flow, Option, Schema } from "effect"
-import { Async, Component, Memoized } from "effect-fc"
+import { Console, Effect } from "effect"
+import { Async, Component, Memoized } from "effect-view"
 import * as React from "react"
 import { runtime } from "@/runtime"
 
 
-const Post = Schema.Struct({
-    userId: Schema.Int,
-    id: Schema.Int,
-    title: Schema.String,
-    body: Schema.String,
-})
+const fetchPost = (id: number) => Effect.sleep("500 millis").pipe(
+    Effect.as({
+        title: `Post ${id}`,
+        body: `This is the content of post ${id}.`,
+    }),
+)
+
 
 interface AsyncFetchPostViewProps {
     readonly id: number
 }
 
-class AsyncFetchPostView extends Component.make("AsyncFetchPostView")(function*(props: AsyncFetchPostViewProps) {
-    const post = yield* Component.useOnChange(() => HttpClient.HttpClient.pipe(
-        Effect.tap(Effect.sleep("500 millis")),
-        Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ props.id }`)),
-        Effect.andThen(response => response.json),
-        Effect.andThen(Schema.decodeUnknown(Post)),
-    ), [props.id])
+const AsyncFetchPostView = Component.make("AsyncFetchPostView")(function*(
+    props: AsyncFetchPostViewProps,
+) {
+    yield* Component.useOnMount(() => Effect.gen(function*() {
+        yield* Effect.addFinalizer(() => Console.log("AsyncFetchPostView unmounted"))
+        yield* Console.log("AsyncFetchPostView mounted")
+    }))
+
+    const post = yield* Component.useOnChange(
+        () => fetchPost(props.id),
+        [props.id],
+    )
 
     return (
         <div>
@@ -34,10 +39,9 @@ class AsyncFetchPostView extends Component.make("AsyncFetchPostView")(function*(
     )
 }).pipe(
     Async.async,
-    Async.withOptions({ defaultFallback: <Text>Default fallback</Text> }),
+    Async.withOptions({ defaultFallback: <Text>Loading post...</Text> }),
     Memoized.memoized,
-) {}
-
+)
 
 const AsyncRouteComponent = Component.make("AsyncRouteView")(function*() {
     const [text, setText] = React.useState("Typing here should not trigger a refetch of the post")
@@ -50,20 +54,22 @@ const AsyncRouteComponent = Component.make("AsyncRouteView")(function*() {
             <Flex direction="column" align="stretch" gap="2">
                 <TextField.Root
                     value={text}
-                    onChange={e => setText(e.currentTarget.value)}
+                    onChange={event => setText(event.currentTarget.value)}
                 />
 
                 <Slider
                     value={[id]}
-                    onValueChange={flow(Array.head, Option.getOrThrow, setId)}
+                    min={1}
+                    max={10}
+                    onValueChange={([value]) => setId(value ?? 1)}
                 />
 
-                <AsyncFetchPost id={id} fallback={<Text>Loading post...</Text>} />
+                <AsyncFetchPost id={id} />
             </Flex>
         </Container>
     )
 }).pipe(
-    Component.withRuntime(runtime.context)
+    Component.withContext(runtime.context),
 )
 
 export const Route = createFileRoute("/async")({

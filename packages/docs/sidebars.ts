@@ -6,6 +6,7 @@ const sidebars: SidebarsConfig = {
   docsSidebar: [
     "getting-started",
     "state-management",
+    "async",
     "query",
     "mutation",
     "forms",

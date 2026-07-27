@@ -52,6 +52,14 @@ valid decoded value should go:
 | `MutationForm` | Yes | It is passed to a mutation when `submit` runs. |
 | `LensForm` | Yes | It is written automatically to a target `Lens`. |
 
+## Create forms once
+
+`MutationForm.service` and `LensForm.service` are Effect constructors, not
+hooks. Create each root form once and keep it stable. For a component-owned
+form, call the constructor inside `Component.useOnMount`; for a form shared by
+multiple components, create it in an Effect service. Update the existing form's
+Lenses rather than reconstructing the form during render.
+
 ## MutationForm: validate, then submit
 
 Use `MutationForm` for registration, checkout, search, and other workflows with
@@ -102,9 +110,9 @@ mutation receives the schema's decoded profile, so `profile.age` is a number.
 Schema transformations happen before the mutation and schema issues prevent an
 invalid draft from being submitted.
 
-`MutationForm.service` also starts initial validation in the current scope. Use
-it inside `Component.useOnMount`, a scoped service, or another Effect scope so
-its validation and mutation work is cleaned up with its owner.
+`MutationForm.service` also starts initial validation in the current scope. In
+the example above, `Component.useOnMount` keeps that validation and the form's
+mutation work tied to the component that owns them.
 
 ## LensForm: validate, then synchronize
 
@@ -163,124 +171,6 @@ Pass `initialEncodedValue` only when the first draft should differ from the
 encoded target. Otherwise `LensForm.service` obtains the initial draft by
 encoding the target through the schema.
 
-## Example: local date input, UTC domain value
-
-The encoded/decoded distinction is especially useful for dates. An HTML
-`datetime-local` input produces a wall-clock string such as
-`"2026-07-22T14:30"`. It contains no time-zone or UTC offset, while application
-state and APIs usually need an unambiguous UTC instant.
-
-A schema can own that entire conversion. The following schema interprets the
-input in the current time zone and decodes it to `DateTime.Utc`:
-
-```tsx title="src/DateTimeUtcFromZonedInput.ts"
-import { DateTime, Effect, Option, ParseResult, Schema } from "effect"
-
-class DateTimeUtcFromZoned extends Schema.transformOrFail(
-  Schema.DateTimeZonedFromSelf,
-  Schema.DateTimeUtcFromSelf,
-  {
-    strict: true,
-    decode: (input) => ParseResult.succeed(DateTime.toUtc(input)),
-    encode: DateTime.setZoneCurrent,
-  },
-) {}
-
-export class DateTimeUtcFromZonedInput extends Schema.transformOrFail(
-  Schema.String,
-  DateTimeUtcFromZoned,
-  {
-    strict: true,
-    decode: (input, _options, ast) =>
-      Effect.flatMap(DateTime.CurrentTimeZone, (timeZone) =>
-        Option.match(
-          DateTime.makeZoned(input, {
-            timeZone,
-            adjustForTimeZone: true,
-          }),
-          {
-            onSome: ParseResult.succeed,
-            onNone: () =>
-              ParseResult.fail(
-                new ParseResult.Type(
-                  ast,
-                  input,
-                  "Enter a valid date and time",
-                ),
-              ),
-          },
-        ),
-      ),
-    encode: (value) =>
-      ParseResult.succeed(
-        DateTime.formatIsoZoned(value).slice(0, 16),
-      ),
-  },
-) {}
-```
-
-Use it like any other field schema. The form and input work with a string, but
-the mutation receives UTC:
-
-```tsx
-import { DateTime, Effect, Schema } from "effect"
-import { Component, Form, MutationForm, View } from "effect-view"
-import { DateTimeUtcFromZonedInput } from "./DateTimeUtcFromZonedInput"
-
-const AppointmentSchema = Schema.Struct({
-  startsAt: DateTimeUtcFromZonedInput,
-})
-
-const AppointmentView = Component.make("Appointment")(function* () {
-  const [form, startsAtField] = yield* Component.useOnMount(() =>
-    Effect.gen(function* () {
-      const form = yield* MutationForm.service({
-        schema: AppointmentSchema,
-        initialEncodedValue: { startsAt: "" },
-        f: ([appointment]) =>
-          Effect.log(
-            `Saving ${DateTime.formatIso(appointment.startsAt)}`,
-          ),
-      })
-
-      return [form, Form.focusObjectOn(form, "startsAt")] as const
-    }),
-  )
-
-  const startsAt = yield* Form.useInput(startsAtField)
-  const [canCommit] = yield* View.useAll([form.canCommit])
-  const runPromise = yield* Component.useRunPromise()
-
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault()
-        void runPromise(form.submit)
-      }}
-    >
-      <input
-        type="datetime-local"
-        value={startsAt.value}
-        onChange={(event) =>
-          startsAt.setValue(event.currentTarget.value)
-        }
-      />
-      <button disabled={!canCommit}>Save appointment</button>
-    </form>
-  )
-})
-```
-
-The schema requires `DateTime.CurrentTimeZone`; provide
-`DateTime.layerCurrentZoneLocal` in the application runtime. If the current
-zone is `Europe/Paris`, for example, entering `2026-07-22T14:30` decodes to the
-UTC instant `2026-07-22T12:30:00.000Z`.
-
-Encoding works in the other direction. A `LensForm` whose target contains that
-UTC instant presents `2026-07-22T14:30` to the local input. The component never
-manually parses dates, applies offsets, or maintains a second representation;
-the schema defines both directions and the form keeps them synchronized.
-
 ## Focus into subforms
 
 The root `MutationForm` or `LensForm` represents the complete schema. UI
@@ -298,6 +188,16 @@ const ageField = Form.focusObjectOn(form, "age")
 
 const contactForm = Form.focusObjectOn(form, "contact")
 const emailField = Form.focusObjectOn(contactForm, "email")
+```
+
+Form focus helpers also have a dual API. Pass only the key or index to get a curried function. Curried helpers can be chained
+with `pipe` to focus through a deeper path:
+
+```tsx
+const emailField = form.pipe(
+  Form.focusObjectOn("contact"),
+  Form.focusObjectOn("email"),
+)
 ```
 
 `displayNameField`, `ageField`, and `emailField` can each be passed to the input
@@ -455,3 +355,121 @@ They expose the schema pipeline as reactive Lenses and Views:
 The form model itself is Effect code. Effect View adds the React-facing hooks,
 including `Form.useInput` and `Form.useOptionalInput`, while your own component
 library remains responsible for rendering controls and layout.
+
+## Example: local date input, UTC domain value
+
+The encoded/decoded distinction is especially useful for dates. An HTML
+`datetime-local` input produces a wall-clock string such as
+`"2026-07-22T14:30"`. It contains no time-zone or UTC offset, while application
+state and APIs usually need an unambiguous UTC instant.
+
+A schema can own that entire conversion. The following schema interprets the
+input in the current time zone and decodes it to `DateTime.Utc`:
+
+```tsx title="src/DateTimeUtcFromZonedInput.ts"
+import { DateTime, Effect, Option, ParseResult, Schema } from "effect"
+
+class DateTimeUtcFromZoned extends Schema.transformOrFail(
+  Schema.DateTimeZonedFromSelf,
+  Schema.DateTimeUtcFromSelf,
+  {
+    strict: true,
+    decode: (input) => ParseResult.succeed(DateTime.toUtc(input)),
+    encode: DateTime.setZoneCurrent,
+  },
+) {}
+
+export class DateTimeUtcFromZonedInput extends Schema.transformOrFail(
+  Schema.String,
+  DateTimeUtcFromZoned,
+  {
+    strict: true,
+    decode: (input, _options, ast) =>
+      Effect.flatMap(DateTime.CurrentTimeZone, (timeZone) =>
+        Option.match(
+          DateTime.makeZoned(input, {
+            timeZone,
+            adjustForTimeZone: true,
+          }),
+          {
+            onSome: ParseResult.succeed,
+            onNone: () =>
+              ParseResult.fail(
+                new ParseResult.Type(
+                  ast,
+                  input,
+                  "Enter a valid date and time",
+                ),
+              ),
+          },
+        ),
+      ),
+    encode: (value) =>
+      ParseResult.succeed(
+        DateTime.formatIsoZoned(value).slice(0, 16),
+      ),
+  },
+) {}
+```
+
+Use it like any other field schema. The form and input work with a string, but
+the mutation receives UTC:
+
+```tsx
+import { DateTime, Effect, Schema } from "effect"
+import { Component, Form, MutationForm, View } from "effect-view"
+import { DateTimeUtcFromZonedInput } from "./DateTimeUtcFromZonedInput"
+
+const AppointmentSchema = Schema.Struct({
+  startsAt: DateTimeUtcFromZonedInput,
+})
+
+const AppointmentView = Component.make("Appointment")(function* () {
+  const [form, startsAtField] = yield* Component.useOnMount(() =>
+    Effect.gen(function* () {
+      const form = yield* MutationForm.service({
+        schema: AppointmentSchema,
+        initialEncodedValue: { startsAt: "" },
+        f: ([appointment]) =>
+          Effect.log(
+            `Saving ${DateTime.formatIso(appointment.startsAt)}`,
+          ),
+      })
+
+      return [form, Form.focusObjectOn(form, "startsAt")] as const
+    }),
+  )
+
+  const startsAt = yield* Form.useInput(startsAtField)
+  const [canCommit] = yield* View.useAll([form.canCommit])
+  const runPromise = yield* Component.useRunPromise()
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        void runPromise(form.submit)
+      }}
+    >
+      <input
+        type="datetime-local"
+        value={startsAt.value}
+        onChange={(event) =>
+          startsAt.setValue(event.currentTarget.value)
+        }
+      />
+      <button disabled={!canCommit}>Save appointment</button>
+    </form>
+  )
+})
+```
+
+The schema requires `DateTime.CurrentTimeZone`; provide
+`DateTime.layerCurrentZoneLocal` in the application runtime. If the current
+zone is `Europe/Paris`, for example, entering `2026-07-22T14:30` decodes to the
+UTC instant `2026-07-22T12:30:00.000Z`.
+
+Encoding works in the other direction. A `LensForm` whose target contains that
+UTC instant presents `2026-07-22T14:30` to the local input. The component never
+manually parses dates, applies offsets, or maintains a second representation;
+the schema defines both directions and the form keeps them synchronized.

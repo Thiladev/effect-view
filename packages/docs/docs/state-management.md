@@ -12,9 +12,9 @@ subscribe to changes, and write updates back to the underlying source. A Lens
 can point at a whole state object or focus on one nested field inside it.
 
 `effect-view` re-exports the `Lens` and `View` modules from
-[`effect-lens`](https://github.com/Thiladev/effect-lens) for convenience. The
+[`effect-lens`](https://www.npmjs.com/package/effect-lens/v/beta) for convenience. The
 core data model and transformation APIs belong to `effect-lens`, so check the
-[`effect-lens` documentation](https://github.com/Thiladev/effect-lens/tree/master/packages/effect-lens) for the full Lens/View API.
+[`effect-lens` documentation](https://www.npmjs.com/package/effect-lens/v/beta) for the full Lens/View API.
 
 The usual pattern is to create state with Effect primitives such as
 `SubscriptionRef`, turn that primitive into a Lens with a matching constructor
@@ -219,15 +219,16 @@ interface UserProfile {
   readonly name: string
   readonly email: string
   readonly role: string
+  readonly contact: {
+    readonly address: {
+      readonly city: string
+    }
+  }
 }
 
 class ProfileState extends Context.Service<
   ProfileState,
-  {
-    readonly profile: Lens.Lens<UserProfile>
-    readonly name: Lens.Lens<string>
-    readonly role: Lens.Lens<string>
-  }
+  { readonly profile: Lens.Lens<UserProfile> }
 >()("ProfileState") {
   static readonly layer = Layer.effect(
     ProfileState,
@@ -237,20 +238,35 @@ class ProfileState extends Context.Service<
           name: "",
           email: "",
           role: "reader",
+          contact: {
+            address: {
+              city: "",
+            },
+          },
         }),
       )
-      const name = Lens.focusObjectOn(profile, "name")
-      const role = Lens.focusObjectOn(profile, "role")
 
-      return { profile, name, role } as const
+      return { profile } as const
     }),
   )
 }
 
 const ProfileNameView = Component.make("ProfileName")(function*() {
   const state = yield* ProfileState
-  const [name, setName] = yield* Lens.useState(state.name)
-  const [role] = yield* View.useAll([state.role])
+  const [nameLens, roleLens, cityLens] = yield* Component.useOnMount(() =>
+    Effect.succeed([
+      Lens.focusObjectOn(state.profile, "name"),
+      Lens.focusObjectOn(state.profile, "role"),
+      state.profile.pipe(
+        Lens.focusObjectOn("contact"),
+        Lens.focusObjectOn("address"),
+        Lens.focusObjectOn("city"),
+      ),
+    ] as const),
+  )
+
+  const [name, setName] = yield* Lens.useState(nameLens)
+  const [role, city] = yield* View.useAll([roleLens, cityLens])
 
   return (
     <label>
@@ -260,15 +276,22 @@ const ProfileNameView = Component.make("ProfileName")(function*() {
         onChange={(event) => setName(event.currentTarget.value)}
       />
       <span>Role: {role}</span>
+      <span>City: {city}</span>
     </label>
   )
 })
 ```
 
-Updating the focused `name` Lens through `Lens.useState` updates the parent
-`profile` Lens. The focused `role` Lens is only read, so it stays on the simpler
-`View.useAll` path.
+The service owns only the root `profile` Lens. The component chooses the fields
+it needs, creates those focused Lenses once in `Component.useOnMount`, and
+subscribes only to them. Updating `nameLens` through `Lens.useState` still
+updates the parent `profile` Lens.
+
+Lens focus helpers have a dual API. They can be called in data-first form, such
+as `Lens.focusObjectOn(profile, "name")`, or in curried form with only the key
+or index. The `cityLens` above uses the curried form with `pipe` to focus through
+a deeper path without storing intermediate Lenses.
 
 For focusing into nested state, deriving lenses, custom write behavior, and the
 complete API, refer to the
-[`effect-lens` documentation](https://github.com/Thiladev/effect-lens/tree/master/packages/effect-lens).
+[`effect-lens` documentation](https://www.npmjs.com/package/effect-lens/v/beta).

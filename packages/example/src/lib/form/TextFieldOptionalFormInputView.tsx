@@ -1,6 +1,6 @@
 import { Callout, Flex, Spinner, Switch, TextField } from "@radix-ui/themes"
 import { Array, Option, Struct } from "effect"
-import { Component, Form, Subscribable } from "effect-fc"
+import { Component, Form, View } from "effect-view"
 import type * as React from "react"
 
 
@@ -17,7 +17,7 @@ export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalF
     props: TextFieldOptionalFormInputView.Props<readonly PropertyKey[], any, any, any>
 ) {
     const input = yield* Form.useOptionalInput(props.form, props)
-    const [issues, isValidating, isCommitting] = yield* Subscribable.useAll([
+    const [issues, isValidating, isCommitting] = yield* View.useAll([
         props.form.issues,
         props.form.isValidating,
         props.form.isCommitting,
@@ -29,7 +29,7 @@ export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalF
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
                 disabled={!input.enabled || isCommitting}
-                {...Struct.omit(props, "form", "defaultValue")}
+                {...Struct.omit(props, ["form", "defaultValue"])}
             >
                 <TextField.Slot side="left">
                     <Switch

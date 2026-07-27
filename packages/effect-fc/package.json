@@ -1,7 +1,7 @@
 {
   "name": "effect-fc",
   "description": "Write React function components with Effect",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "files": [
     "./README.md",
@@ -9,7 +9,7 @@
   ],
   "license": "MIT",
   "repository": {
-    "url": "git+https://github.com/Thiladev/effect-fc.git"
+    "url": "git+https://github.com/Thiladev/effect-view.git"
   },
   "types": "./dist/index.d.ts",
   "exports": {
@@ -50,6 +50,6 @@
     "react": "^19.2.0"
   },
   "dependencies": {
-    "effect-lens": "^0.2.0"
+    "effect-lens": "^0.2.3"
   }
 }

@@ -72,9 +72,15 @@
   letter-spacing: -0.075em;
   line-height: 0.92;
   margin: 0;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
-.hero h1 span {
+.hero h1 .unbreakable {
+  white-space: nowrap;
+}
+
+.hero h1 .heroAccent {
   background: linear-gradient(105deg, var(--home-teal) 5%, #1a9793 48%, var(--home-amber));
   background-clip: text;
   color: transparent;

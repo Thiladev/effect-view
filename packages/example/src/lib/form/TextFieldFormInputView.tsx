@@ -1,6 +1,6 @@
 import { Callout, Flex, Spinner, TextField } from "@radix-ui/themes"
 import { Array, Option, Struct } from "effect"
-import { Component, Form, Subscribable } from "effect-fc"
+import { Component, Form, View } from "effect-view"
 import type * as React from "react"
 
 
@@ -17,7 +17,7 @@ export const TextFieldFormInputView = Component.make("TextFieldFormInputView")(f
     props: TextFieldFormInputView.Props<readonly PropertyKey[], any, any, any>
 ) {
     const input = yield* Form.useInput(props.form, props)
-    const [issues, isValidating, isCommitting] = yield* Subscribable.useAll([
+    const [issues, isValidating, isCommitting] = yield* View.useAll([
         props.form.issues,
         props.form.isValidating,
         props.form.isCommitting,
@@ -29,7 +29,7 @@ export const TextFieldFormInputView = Component.make("TextFieldFormInputView")(f
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
                 disabled={isCommitting}
-                {...Struct.omit(props, "form")}
+                {...Struct.omit(props, ["form"])}
             >
                 {isValidating &&
                     <TextField.Slot side="right">

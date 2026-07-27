@@ -33,6 +33,13 @@ jobs:
         run: bun run test
       - name: Build
         run: bun run build
+      - name: Publish effect-view
+        uses: JS-DevTools/npm-publish@v4
+        with:
+          package: packages/effect-view
+          access: public
+          token: ${{ secrets.NPM_TOKEN }}
+          registry: https://registry.npmjs.org
       - name: Publish effect-fc
         uses: JS-DevTools/npm-publish@v4
         with:

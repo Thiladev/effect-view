@@ -4,7 +4,7 @@
 
 This library is in early development. While it is (almost) feature complete and mostly usable, expect bugs and quirks. Things are still being ironed out, so ideas and criticisms are more than welcome.
 
-Documentation is currently being written. In the meantime, you can take a look at the `packages/example` directory.
+Documentation is currently being written. In the meantime, you can take a look at the `packages/effect-fc-example` directory.
 
 ## Peer dependencies
 - `effect` 3.19+

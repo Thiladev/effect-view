@@ -1,143 +1,82 @@
 import { Button, Container, Flex, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Console, Effect, Match, Option, ParseResult, Schema } from "effect"
-import { Component, Form, SubmittableForm, Subscribable } from "effect-fc"
+import { Console, Effect, Schema } from "effect"
+import { Component, Form, MutationForm, View } from "effect-view"
 import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
-import { TextFieldOptionalFormInputView } from "@/lib/form/TextFieldOptionalFormInputView"
-import { DateTimeUtcFromZonedInput } from "@/lib/schema"
 import { runtime } from "@/runtime"
 
 
-const email = Schema.pattern<typeof Schema.String>(
-    /^(?!\.)(?!.*\.\.)([A-Z0-9_+-.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9-]*\.)+[A-Z]{2,}$/i,
-
-    {
-        identifier: "email",
-        title: "email",
-        message: () => "Not an email address",
-    },
-)
-
-const RegisterFormSchema = Schema.Struct({
-    email: Schema.String.pipe(email),
-    password: Schema.String.pipe(Schema.minLength(3)),
-    birth: Schema.OptionFromSelf(DateTimeUtcFromZonedInput),
-})
-
-const RegisterFormSubmitSchema = Schema.Struct({
-    email: Schema.transformOrFail(
-        Schema.String,
-        Schema.String,
-        {
-            decode: (input, _options, ast) => input !== "admin@admin.com"
-                ? ParseResult.succeed(input)
-                : ParseResult.fail(new ParseResult.Type(ast, input, "This email is already in use.")),
-            encode: ParseResult.succeed,
-        },
+const RegisterSchema = Schema.Struct({
+    email: Schema.String.check(
+        Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, {
+            message: "Enter a valid email address",
+        }),
     ),
-    password: Schema.String,
-    birth: Schema.OptionFromSelf(Schema.DateTimeUtcFromSelf),
+    password: Schema.String.check(
+        Schema.isMinLength(5, {
+            message: "Password must be at least 5 characters long",
+        }),
+    ),
 })
 
-class RegisterFormService extends Effect.Service<RegisterFormService>()("RegisterFormService", {
-    scoped: Effect.gen(function*() {
-        const form = yield* SubmittableForm.service({
-            schema: RegisterFormSchema.pipe(
-                Schema.compose(
-                    Schema.transformOrFail(
-                        Schema.typeSchema(RegisterFormSchema),
-                        Schema.typeSchema(RegisterFormSchema),
-                        {
-                            decode: v => Effect.andThen(Effect.sleep("500 millis"), ParseResult.succeed(v)),
-                            encode: ParseResult.succeed,
-                        },
-                    ),
-                ),
-            ),
+const RegisterRouteComponent = Component.make("RegisterRouteView")(function*() {
+    yield* Component.useOnMount(() => Effect.gen(function*() {
+        yield* Effect.addFinalizer(() => Console.log("Form route unmounted"))
+        yield* Console.log("Form route mounted")
+    }))
 
-            initialEncodedValue: { email: "", password: "", birth: Option.none() },
-            f: Effect.fnUntraced(function*([value]) {
-                yield* Effect.sleep("500 millis")
-                return yield* Schema.decode(RegisterFormSubmitSchema)(value)
-            }),
+    const [form, emailField, passwordField] = yield* Component.useOnMount(() => Effect.gen(function*() {
+        const form = yield* MutationForm.service({
+            schema: RegisterSchema,
+            initialEncodedValue: { email: "", password: "" },
+            f: ([value]) => Effect.log(`Registered ${value.email}`),
         })
 
-        return {
-            form,
-            emailField: Form.focusObjectOn(form, "email"),
-            passwordField: Form.focusObjectOn(form, "password"),
-            birthField: Form.focusObjectOn(form, "birth"),
-        } as const
-    })
-}) {}
+        const emailField = Form.focusObjectOn(form, "email")
+        const passwordField = Form.focusObjectOn(form, "password")
 
-class RegisterFormView extends Component.make("RegisterFormView")(function*() {
-    const form = yield* RegisterFormService
-    const [canCommit, submitResult] = yield* Subscribable.useAll([
-        form.form.canCommit,
-        form.form.mutation.result,
+        return [form, emailField, passwordField] as const
+    }))
+
+    const [canCommit, isCommitting] = yield* View.useAll([
+        form.canCommit,
+        form.isCommitting,
     ])
 
-    const runPromise = yield* Component.useRunPromise()
     const TextFieldFormInput = yield* TextFieldFormInputView.use
-    const TextFieldOptionalFormInput = yield* TextFieldOptionalFormInputView.use
-
-    yield* Component.useOnMount(() => Effect.gen(function*() {
-        yield* Effect.addFinalizer(() => Console.log("RegisterFormView unmounted"))
-        yield* Console.log("RegisterFormView mounted")
-    }))
+    const runPromise = yield* Component.useRunPromise()
 
 
     return (
         <Container width="300">
-            <form onSubmit={e => {
-                e.preventDefault()
-                void runPromise(form.form.submit)
+            <form onSubmit={event => {
+                event.preventDefault()
+                void runPromise(form.submit)
             }}>
                 <Flex direction="column" gap="2">
                     <TextFieldFormInput
-                        form={form.emailField}
+                        form={emailField}
+                        placeholder="Email"
                         debounce="250 millis"
                     />
-
                     <TextFieldFormInput
-                        form={form.passwordField}
+                        form={passwordField}
+                        placeholder="Password"
+                        type="password"
                         debounce="250 millis"
                     />
-
-                    <TextFieldOptionalFormInput
-                        type="datetime-local"
-                        form={form.birthField}
-                        defaultValue=""
-                    />
-
-                    <Button disabled={!canCommit}>Submit</Button>
+                    <Button disabled={!canCommit || isCommitting}>
+                        {isCommitting ? "Submitting…" : "Submit"}
+                    </Button>
                 </Flex>
             </form>
-
-            {Match.value(submitResult).pipe(
-                Match.tag("Initial", () => <></>),
-                Match.tag("Running", () => <Text>Submitting...</Text>),
-                Match.tag("Success", () => <Text>Submitted successfully!</Text>),
-                Match.tag("Failure", e => <Text>Error: {e.cause.toString()}</Text>),
-                Match.exhaustive,
-            )}
+            <Text size="2">A MutationForm validates local input, then submits it.</Text>
         </Container>
     )
-}) {}
-
-const RegisterPage = Component.make("RegisterPageView")(function*() {
-    const RegisterForm = yield* Effect.provide(
-        RegisterFormView.use,
-        yield* Component.useLayer(RegisterFormService.Default),
-    )
-
-    return <RegisterForm />
 }).pipe(
-    Component.withRuntime(runtime.context)
+    Component.withContext(runtime.context),
 )
 
-
 export const Route = createFileRoute("/form")({
-    component: RegisterPage
+    component: RegisterRouteComponent,
 })

@@ -30,6 +30,11 @@ Create a mutation in a component scope with `Mutation.make`. Its function can
 be any Effect, including one that requires services from the application
 runtime:
 
+`Mutation.make` is an Effect constructor, not a hook. Create each mutation
+instance once and keep it stable instead of calling `Mutation.make` again on
+every render. Use `Component.useOnMount` for a component-owned mutation or
+create it in an Effect service when it should be shared.
+
 ```tsx
 import { Effect } from "effect"
 import { AsyncResult } from "effect/unstable/reactivity"

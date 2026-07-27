@@ -1,10 +1,11 @@
-import { FetchHttpClient } from "@effect/platform"
 import { Clipboard, Geolocation, Permissions } from "@effect/platform-browser"
 import { DateTime, Layer } from "effect"
-import { ReactRuntime } from "effect-fc"
+import { FetchHttpClient } from "effect/unstable/http"
+import { QueryClient, ReactRuntime } from "effect-view"
 
 
-export const AppLive = Layer.empty.pipe(
+export const layer = Layer.empty.pipe(
+    Layer.provideMerge(QueryClient.layer()),
     Layer.provideMerge(DateTime.layerCurrentZoneLocal),
     Layer.provideMerge(Clipboard.layer),
     Layer.provideMerge(Geolocation.layer),
@@ -12,4 +13,4 @@ export const AppLive = Layer.empty.pipe(
     Layer.provideMerge(FetchHttpClient.layer),
 )
 
-export const runtime = ReactRuntime.make(AppLive)
+export const runtime = ReactRuntime.make(layer)

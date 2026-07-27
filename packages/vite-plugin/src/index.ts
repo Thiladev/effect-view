@@ -47,8 +47,8 @@ const refreshIdentifier = "__effectViewRefresh"
 const acceptIdentifier = "__effectViewAccept"
 
 const isSupportedPackage = (source: string): boolean =>
-    source === "effect-fc-next"
-    || source === "effect-fc-next/Component"
+    source === "effect-view"
+    || source === "effect-view/Component"
 
 const collectImports = (
     sourceFile: ts.SourceFile,
@@ -342,7 +342,7 @@ const scriptKind = (id: string): ts.ScriptKind => id.endsWith(".tsx")
  *
  * Place this plugin before `@vitejs/plugin-react`.
  */
-export function effectViewPlugin(
+export function effectView(
     options: EffectViewRefreshOptions = {},
 ): Plugin {
     const include = options.include ?? defaultInclude

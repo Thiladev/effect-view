@@ -273,6 +273,7 @@ describe("Component", () => {
         )
 
         await screen.findByText("first")
+        vi.useFakeTimers()
 
         view.rerender(
             <runtime.context.Provider value={effectRuntime}>
@@ -280,16 +281,19 @@ describe("Component", () => {
             </runtime.context.Provider>
         )
 
-        await screen.findByText("second")
+        expect(screen.getByText("second")).toBeTruthy()
         expect(cleanup).not.toHaveBeenCalled()
 
-        await new Promise(resolve => setTimeout(resolve, 5))
+        await vi.advanceTimersByTimeAsync(19)
         expect(cleanup).not.toHaveBeenCalled()
 
-        await waitFor(() => expect(cleanup).toHaveBeenCalledWith("first"), { timeout: 100 })
+        await vi.advanceTimersByTimeAsync(1)
+        expect(cleanup).toHaveBeenCalledWith("first")
 
         view.unmount()
-        await waitFor(() => expect(cleanup).toHaveBeenCalledWith("second"), { timeout: 100 })
+        await vi.advanceTimersByTimeAsync(20)
+        expect(cleanup).toHaveBeenCalledWith("second")
+        vi.useRealTimers()
         await Effect.runPromise(runtime.runtime.disposeEffect)
     })
 

@@ -3,26 +3,26 @@
 Experimental Vite Fast Refresh support for Effect View components.
 
 ```ts
-import { effectViewPlugin } from "@effect-view/vite-plugin"
+import { effectView } from "@effect-view/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 export default defineConfig({
     plugins: [
-        effectViewPlugin(),
+        effectView(),
         react(),
     ],
 })
 ```
 
 The plugin recognizes `Component.make` and `Component.makeUntraced`
-definitions imported from `effect-fc-next`. The legacy `effect-fc` package is
-not supported. `effect-fc-next` owns the bundler-neutral refresh cell protocol;
+definitions imported from `effect-view`. The legacy `effect-fc` package is
+not supported. `effect-view` owns the bundler-neutral refresh cell protocol;
 this package is the Vite adapter that retains those cells in HMR data. The
 plugin assigns stable development IDs and self-accepts successfully
 instrumented modules.
 
-The adapter-facing protocol is exported from `effect-fc-next/Refreshable`.
+The adapter-facing protocol is exported from `effect-view/Refreshable`.
 
 Renaming or removing an instrumented View invalidates the module upward instead
 of leaving a stale mounted descriptor.

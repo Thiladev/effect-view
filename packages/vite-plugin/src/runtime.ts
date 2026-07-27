@@ -1,5 +1,5 @@
-import type * as Component from "effect-fc-next/Component"
-import * as Refreshable from "effect-fc-next/Refreshable"
+import type * as Component from "effect-view/Component"
+import * as Refreshable from "effect-view/Refreshable"
 
 export interface HotContext {
     readonly data: Record<string, unknown>

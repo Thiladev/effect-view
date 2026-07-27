@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://thila.dev/effect-view">
-    <img src="packages/docs/static/img/logo.svg" width="104" height="104" alt="Effect View logo" />
+    <img src="https://github.com/Thiladev/effect-view/raw/master/packages/docs/static/img/logo.svg" width="104" height="104" alt="Effect View logo" />
   </a>
 </p>
 
@@ -19,12 +19,12 @@ components, hooks, and JSX.
 
 | Package | Description |
 | --- | --- |
-| [`effect-view`](packages/effect-fc-next) | The Effect View library for Effect v4 and React 19. |
+| [`effect-view`](packages/effect-view) | The Effect View library for Effect v4 and React 19. |
 | [`@effect-view/vite-plugin`](packages/vite-plugin) | Vite Fast Refresh support for Effect View components. |
 | [`docs`](packages/docs) | The [Effect View documentation](https://thila.dev/effect-view), built with Docusaurus. |
-| [`example-next`](packages/example-next) | Example application using Effect View and Effect v4. |
+| [`example`](packages/example) | Example application using Effect View and Effect v4. |
 | [`effect-fc`](packages/effect-fc) | Legacy Effect v3 package. |
-| [`example`](packages/example) | Example application for the legacy package. |
+| [`effect-fc-example`](packages/effect-fc-example) | Example application for the legacy package. |
 
 ## Development
 
@@ -47,7 +47,7 @@ bun run build
 Start the Effect View example or documentation site:
 
 ```bash
-bun run --cwd packages/example-next dev
+bun run --cwd packages/example dev
 bun run --cwd packages/docs start
 ```
 

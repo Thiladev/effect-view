@@ -1,24 +1,56 @@
+import { Button, Container, Flex, Text, TextField } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
-import { Effect } from "effect"
-import { Component } from "effect-fc"
+import { Effect, SubscriptionRef } from "effect"
+import { Component, Lens, View } from "effect-view"
 import { runtime } from "@/runtime"
-import { TodosState } from "@/todo/TodosState"
-import { TodosView } from "@/todo/TodosView"
 
 
-const TodosStateLive = TodosState.Default("todos")
+const TodoRouteComponent = Component.make("TodoRouteView")(function*() {
+    const todosLens = yield* Component.useOnMount(() => Effect.map(
+        SubscriptionRef.make<readonly string[]>([]),
+        Lens.fromSubscriptionRef,
+    ))
+    const draftLens = yield* Component.useOnMount(() => Effect.map(
+        SubscriptionRef.make(""),
+        Lens.fromSubscriptionRef,
+    ))
 
-const Index = Component.make("IndexView")(function*() {
-    const Todos = yield* Effect.provide(
-        TodosView.use,
-        yield* Component.useLayer(TodosStateLive),
+    const [todos] = yield* View.useAll([todosLens])
+    const [draft, setDraft] = yield* Lens.useState(draftLens)
+    const runPromise = yield* Component.useRunPromise()
+
+    const addTodo = Lens.update(todosLens, todos =>
+        draft.trim() === ""
+            ? todos
+            : [...todos, draft.trim()],
+    ).pipe(
+        Effect.andThen(Lens.set(draftLens, "")),
     )
 
-    return <Todos />
+    return (
+        <Container width="480">
+            <Flex direction="column" gap="3">
+                <Text size="2">A small Effect v4 todo state example backed by a Lens.</Text>
+
+                <Flex gap="2">
+                    <TextField.Root
+                        value={draft}
+                        onChange={event => setDraft(event.currentTarget.value)}
+                    />
+
+                    <Button onClick={() => void runPromise(addTodo)}>
+                        Add
+                    </Button>
+                </Flex>
+
+                {todos.map(todo => <Text key={todo}>• {todo}</Text>)}
+            </Flex>
+        </Container>
+    )
 }).pipe(
-    Component.withRuntime(runtime.context)
+    Component.withContext(runtime.context),
 )
 
 export const Route = createFileRoute("/")({
-    component: Index
+    component: TodoRouteComponent,
 })
