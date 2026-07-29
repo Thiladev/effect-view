@@ -100,7 +100,7 @@
     "@effect/platform-browser": "4.0.0-beta.101",
     "@testing-library/react": "^16.3.0",
     "effect": "4.0.0-beta.101",
-    "jsdom": "^26.1.0",
+    "jsdom": "^30.0.0",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
