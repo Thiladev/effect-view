@@ -57,11 +57,11 @@ client defaults. Window-focus refresh also requires the optional
 ## Create a reactive query
 
 A query is driven by a `View` rather than by a value read during one React
-render. Whenever that key changes, `Query.service` checks the cache and starts
+render. Whenever that key changes, a running Query checks the cache and starts
 the query effect when necessary.
 
-`Query.service` is an Effect constructor, not a hook. Create each query instance
-once and keep it stable. In a component, the usual place is
+`Query.make` constructs the Query and `Query.thenRun` starts it in the current
+scope. Create each query instance once and keep it stable. In a component, the usual place is
 `Component.useOnMount`; a query shared by multiple components can instead be
 owned by an Effect service. Change the existing query's reactive key rather
 than reconstructing the query during render.
@@ -84,7 +84,7 @@ const PostView = Component.make("Post")(function* () {
         yield* SubscriptionRef.make(["post", 1 as number] as const),
       )
 
-      const query = yield* Query.service({
+      const query = yield* Query.make({
         key,
         staleTime: "1 minute",
         f: ([, id]) =>
@@ -95,7 +95,7 @@ const PostView = Component.make("Post")(function* () {
             Effect.andThen((response) => response.json),
             Effect.andThen(Schema.decodeUnknownEffect(Post)),
           ),
-      })
+      }).pipe(Query.thenRun)
 
       return [Lens.focusTupleAt(key, 1), query] as const
     }),
@@ -124,7 +124,7 @@ Effect equality by default, so structurally equal Effect data types work well
 as query keys. Supply `keyEquivalence` when the key needs different equality
 semantics.
 
-`Query.service` starts watching its key in the current scope. The
+`Query.thenRun` starts watching its key in the current scope. The
 `Component.useOnMount` call above keeps both the query instance and its query
 function identity stable for the component's lifetime.
 
@@ -248,6 +248,35 @@ workflows that need to wait for the final success or failure state.
 Invalidating does not itself refetch. Follow it with `refreshView`, change the
 key, or allow a later fetch to repopulate the cache.
 
+### Refresh on an interval
+
+Refresh every five minutes, starting after five minutes:
+
+```ts
+import { Schedule } from "effect"
+
+const query = yield* Query.make(options).pipe(
+  Query.thenRun,
+  Query.withScheduledRefresh(Schedule.spaced("5 minutes")),
+)
+```
+
+Limit the number of refreshes:
+
+```ts
+const query = yield* Query.make(options).pipe(
+  Query.thenRun,
+  Query.withScheduledRefresh(
+    Schedule.spaced("5 minutes").pipe(
+      Schedule.upTo({ times: 3 }),
+    ),
+  ),
+)
+```
+
+The refresh fiber stops with the surrounding scope. The Effect returns the
+original query. Cache and `staleTime` rules still apply.
+
 ## Staleness and cache lifetime
 
 `staleTime` controls how long a successful result can satisfy a fetch without
@@ -262,12 +291,12 @@ By default, the client enables refresh on browser window focus. Set it globally
 or override it for one query:
 
 ```tsx
-const query = yield* Query.service({
+const query = yield* Query.make({
   key,
   f: loadPost,
   staleTime: "10 seconds",
   refreshOnWindowFocus: false,
-})
+}).pipe(Query.thenRun)
 ```
 
 Window-focus refresh depends on the optional `@effect/platform-browser`

@@ -115,18 +115,14 @@ export const make = Effect.fnUntraced(function* (
     )
 })
 
-export declare namespace service {
-    export interface Options extends make.Options {}
-}
-
-export const service = (
-    options?: service.Options
-): Effect.Effect<QueryClientService, Cause.NoSuchElementError, Scope.Scope> => Effect.tap(
-    make(options),
+export const thenRun = <E = never, R = never>(
+    self: Effect.Effect<QueryClientService, E, R>,
+): Effect.Effect<QueryClientService, E, Scope.Scope | R> => Effect.tap(
+    self,
     client => Effect.forkScoped(client.run),
 )
 
-export const layer = (options?: service.Options) => Layer.effect(QueryClient, service(options))
+export const layer = (options?: make.Options) => Layer.effect(QueryClient, thenRun(make(options)))
 
 
 export const QueryClientCacheKeyTypeId: unique symbol = Symbol.for("@effect-view/QueryClient/QueryClientCacheKey")

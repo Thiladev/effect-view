@@ -196,18 +196,13 @@ export const make = Effect.fnUntraced(function* <A, I = A, RD = never, RE = neve
     )
 })
 
-export declare namespace service {
-    export interface Options<in out A, in out I = A, in out RD = never, in out RE = never, out MA = void, out ME = never, out MR = never>
-    extends make.Options<A, I, RD, RE, MA, ME, MR> {}
-}
-
-export const service = <A, I = A, RD = never, RE = never, MA = void, ME = never, MR = never>(
-    options: service.Options<A, I, RD, RE, MA, ME, MR>
+export const thenRun = <A, I = A, RD = never, RE = never, MA = void, ME = never, MR = never, E = never, R = never>(
+    self: Effect.Effect<MutationForm<A, I, RD, RE, MA, ME, MR>, E, R>,
 ): Effect.Effect<
     MutationForm<A, I, RD, RE, MA, ME, MR>,
-    never,
-    Scope.Scope | RD | RE | MR
+    E,
+    Scope.Scope | R
 > => Effect.tap(
-    make(options),
+    self,
     form => Effect.forkScoped(form.run),
 )

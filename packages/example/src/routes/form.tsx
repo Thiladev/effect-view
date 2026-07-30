@@ -26,11 +26,13 @@ const RegisterRouteComponent = Component.make("RegisterRouteView")(function*() {
     }))
 
     const [form, emailField, passwordField] = yield* Component.useOnMount(() => Effect.gen(function*() {
-        const form = yield* MutationForm.service({
+        const form = yield* MutationForm.make({
             schema: RegisterSchema,
             initialEncodedValue: { email: "", password: "" },
             f: ([value]) => Effect.log(`Registered ${value.email}`),
-        })
+        }).pipe(
+            MutationForm.thenRun,
+        )
 
         const emailField = Form.focusObjectOn(form, "email")
         const passwordField = Form.focusObjectOn(form, "password")

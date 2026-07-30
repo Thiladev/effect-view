@@ -1,4 +1,5 @@
-import { Effect, type Scope, Stream } from "effect"
+import { Effect, Schedule, type Scope, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import { AsyncResult } from "effect/unstable/reactivity"
 import { describe, expect, it } from "vitest"
 import * as Query from "./Query.js"
@@ -79,6 +80,49 @@ describe("Query", () => {
         expect(expectSuccessValue(result[1])).toBe("value:1:2")
     })
 
+    it("withScheduledRefresh lets the Schedule control the first refresh", async () => {
+        let calls = 0
+        const key = staticKey<readonly [number]>([1])
+
+        const result = await runQueryTest(Effect.gen(function*() {
+            const query = yield* Query.make({
+                key,
+                f: () => Effect.sync(() => {
+                    calls += 1
+                    return calls
+                }),
+                staleTime: "0 millis",
+            }).pipe(
+                Query.thenRun,
+                Query.withScheduledRefresh(
+                    Schedule.spaced("1 second").pipe(
+                        Schedule.upTo({ times: 1 }),
+                    ),
+                ),
+            )
+
+            yield* TestClock.adjust("999 millis")
+            const beforeInterval = calls
+
+            yield* TestClock.adjust("1 millis")
+            const afterFirstInterval = calls
+
+            return {
+                isQuery: Query.isQuery(query),
+                beforeInterval,
+                afterFirstInterval,
+            }
+        }).pipe(
+            Effect.provide(TestClock.layer()),
+        ))
+
+        expect(result).toEqual({
+            isQuery: true,
+            beforeInterval: 1,
+            afterFirstInterval: 2,
+        })
+    })
+
     it("invalidateCacheEntry forces the next fetch for that key to rerun", async () => {
         let calls = 0
         const key = staticKey<readonly [number]>([1])
@@ -136,14 +180,14 @@ describe("Query", () => {
         const key = staticKey<readonly [number]>([1])
 
         const effect = Effect.gen(function*() {
-            const query = yield* Query.service({
+            const query = yield* Query.make({
                 key,
                 f: ([id]: readonly [number]) => Effect.sync(() => {
                     calls += 1
                     return `value:${id}:${calls}`
                 }),
                 staleTime: "1 minute",
-            })
+            }).pipe(Query.thenRun)
 
             const latestFinalState = yield* Effect.sleep("1 millis").pipe(
                 Effect.andThen(View.get(query.latestFinalState)),

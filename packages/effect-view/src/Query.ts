@@ -1,4 +1,4 @@
-import { Cause, type Context, Duration, Effect, Equal, type Equivalence, Exit, Fiber, Option, Pipeable, Predicate, PubSub, Ref, type Scope, Semaphore, Stream, SubscriptionRef } from "effect"
+import { Cause, type Context, Duration, Effect, Equal, type Equivalence, Exit, Fiber, Function, Option, Pipeable, Predicate, PubSub, Ref, type Schedule, type Scope, Semaphore, Stream, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/unstable/reactivity"
 import * as Lens from "./Lens.js"
 import * as QueryClient from "./QueryClient.js"
@@ -410,16 +410,51 @@ export const make = Effect.fnUntraced(function* <K, A, E = never, R = never>(
     )
 })
 
-export const service = <K, A, E = never, R = never>(
-    options: make.Options<K, A, E, R>
-): Effect.Effect<
-    Query<K, A, E, R>,
-    Cause.NoSuchElementError,
-    Scope.Scope | QueryClient.QueryClient | R
-> => Effect.tap(
-    make(options),
+export const thenRun = <K, A, E = never, R = never, E2 = never, R2 = never>(
+    self: Effect.Effect<Query<K, A, E, R>, E2, R2>,
+): Effect.Effect<Query<K, A, E, R>, E2, Scope.Scope | R2> => Effect.tap(
+    self,
     query => Effect.forkScoped(query.run),
 )
+
+/**
+ * Refreshes the Query on a schedule and returns it.
+ *
+ * @example Refresh every five minutes, starting after five minutes
+ * ```ts
+ * yield* Query.make(options).pipe(
+ *   Query.thenRun,
+ *   Query.withScheduledRefresh(Schedule.spaced("5 minutes")),
+ * )
+ * ```
+ *
+ * @example Refresh at most three times
+ * ```ts
+ * yield* Query.make(options).pipe(
+ *   Query.thenRun,
+ *   Query.withScheduledRefresh(
+ *     Schedule.spaced("5 minutes").pipe(Schedule.upTo({ times: 3 })),
+ *   ),
+ * )
+ * ```
+ */
+export const withScheduledRefresh: {
+    <Output, Error, Env>(
+        schedule: Schedule.Schedule<Output, unknown, Error, Env>,
+    ): <K, A, E, R, E2, R2>(
+        self: Effect.Effect<Query<K, A, E, R>, E2, R2>,
+    ) => Effect.Effect<Query<K, A, E, R>, E2, Scope.Scope | Env | R2>
+    <K, A, E, R, E2, R2, Output, Error, Env>(
+        self: Effect.Effect<Query<K, A, E, R>, E2, R2>,
+        schedule: Schedule.Schedule<Output, unknown, Error, Env>,
+    ): Effect.Effect<Query<K, A, E, R>, E2, Scope.Scope | Env | R2>
+} = Function.dual(2, <K, A, E, R, E2, R2, Output, Error, Env>(
+    self: Effect.Effect<Query<K, A, E, R>, E2, R2>,
+    schedule: Schedule.Schedule<Output, unknown, Error, Env>,
+) => Effect.tap(
+    self,
+    query => Effect.forkScoped(Effect.schedule(query.refresh, schedule)),
+))
 
 
 export class QueryStateLens<in out K, in out A, in out E = never>

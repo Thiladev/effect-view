@@ -36,16 +36,18 @@ const QueryRouteComponent = Component.make("QueryRouteView")(function*() {
         const keyLens = Lens.fromSubscriptionRef(yield* SubscriptionRef.make(["post", 1 as number] as const))
         const idLens = Lens.focusTupleAt(keyLens, 1)
 
-        const query = yield* Query.service({
+        const query = yield* Query.make({
             key: keyLens,
             f: ([, id]) => HttpClient.HttpClient.pipe(
-                Effect.tap(Effect.sleep("1 second")),
-                Effect.andThen(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
-                Effect.andThen(response => response.json),
-                Effect.andThen(Schema.decodeUnknownEffect(Post)),
+                Effect.tap(Effect.sleep("500 millis")),
+                Effect.flatMap(client => client.get(`https://jsonplaceholder.typicode.com/posts/${ id }`)),
+                Effect.flatMap(response => response.json),
+                Effect.flatMap(Schema.decodeUnknownEffect(Post)),
             ),
             staleTime: "10 seconds",
-        })
+        }).pipe(
+            Query.thenRun,
+        )
 
         const mutation = yield* Mutation.make({
             f: ([id]: [id: number]) => HttpClient.HttpClient.pipe(

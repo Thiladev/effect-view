@@ -65,14 +65,16 @@ const UserProfileEditorView = Component.make("UserProfileEditorView")(function*(
             Stream.runForEach(Lens.changes(appState.lens), Console.log)
         )
 
-        const form = yield* LensForm.service({
+        const form = yield* LensForm.make({
             schema: UserProfileSchema,
             target: Lens.focusObjectOn(appState.lens, "currentUser"),
             initialEncodedValue: {
                 email: "",
                 password: "",
             },
-        })
+        }).pipe(
+            LensForm.thenRun,
+        )
 
         const emailField = Form.focusObjectOn(form, "email")
         const passwordField = Form.focusObjectOn(form, "password")

@@ -189,18 +189,13 @@ export const make = Effect.fnUntraced(function* <A, I = A, RD = never, RE = neve
     )
 })
 
-export declare namespace service {
-    export interface Options<in out A, out I = A, out RD = never, out RE = never, out TER = never, out TEW = never, out TRR = never, out TRW = never>
-    extends make.Options<A, I, RD, RE, TER, TEW, TRR, TRW> {}
-}
-
-export const service = <A, I = A, RD = never, RE = never, TER = never, TEW = never, TRR = never, TRW = never>(
-    options: service.Options<A, I, RD, RE, TER, TEW, TRR, TRW>
+export const thenRun = <A, I = A, RD = never, RE = never, TER = never, TEW = never, TRR = never, TRW = never, E = never, R = never>(
+    self: Effect.Effect<LensForm<A, I, RD, RE, TER, TEW, TRR, TRW>, E, R>,
 ): Effect.Effect<
     LensForm<A, I, RD, RE, TER, TEW, TRR, TRW>,
-    Schema.SchemaError | TER,
-    Scope.Scope | RD | RE | TRR | TRW
+    E,
+    Scope.Scope | R
 > => Effect.tap(
-    make(options),
+    self,
     form => Effect.forkScoped(form.run),
 )

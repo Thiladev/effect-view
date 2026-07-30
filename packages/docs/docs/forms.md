@@ -54,11 +54,9 @@ valid decoded value should go:
 
 ## Create forms once
 
-`MutationForm.service` and `LensForm.service` are Effect constructors, not
-hooks. Create each root form once and keep it stable. For a component-owned
-form, call the constructor inside `Component.useOnMount`; for a form shared by
-multiple components, create it in an Effect service. Update the existing form's
-Lenses rather than reconstructing the form during render.
+`MutationForm.make` and `LensForm.make` construct forms. Pipe them through the
+module's `run` operator to start validation or synchronization in the current
+scope. Create each root form once and keep it stable.
 
 ## MutationForm: validate, then submit
 
@@ -73,7 +71,7 @@ import { Component, MutationForm, View } from "effect-view"
 
 const CreateProfileView = Component.make("CreateProfile")(function* () {
   const form = yield* Component.useOnMount(() =>
-    MutationForm.service({
+    MutationForm.make({
       schema: ProfileSchema,
       initialEncodedValue: {
         displayName: "",
@@ -84,7 +82,7 @@ const CreateProfileView = Component.make("CreateProfile")(function* () {
         Effect.log(
           `Creating ${profile.displayName}, age ${profile.age}`,
         ),
-    }),
+    }).pipe(MutationForm.thenRun),
   )
 
   const [canCommit, isCommitting] = yield* View.useAll([
@@ -110,9 +108,9 @@ mutation receives the schema's decoded profile, so `profile.age` is a number.
 Schema transformations happen before the mutation and schema issues prevent an
 invalid draft from being submitted.
 
-`MutationForm.service` also starts initial validation in the current scope. In
-the example above, `Component.useOnMount` keeps that validation and the form's
-mutation work tied to the component that owns them.
+`MutationForm.thenRun` starts initial validation. In the example above,
+`Component.useOnMount` keeps that validation and the form's mutation work tied
+to the component that owns them.
 
 ## LensForm: validate, then synchronize
 
@@ -136,10 +134,10 @@ const EditProfileView = Component.make("EditProfile")(function* () {
         }),
       )
 
-      const form = yield* LensForm.service({
+      const form = yield* LensForm.make({
         schema: ProfileSchema,
         target: profile,
-      })
+      }).pipe(LensForm.thenRun)
 
       return [form, profile] as const
     }),
@@ -168,8 +166,8 @@ reaches the target. If another part of the application updates the target,
 `LensForm` encodes that value back into the draft.
 
 Pass `initialEncodedValue` only when the first draft should differ from the
-encoded target. Otherwise `LensForm.service` obtains the initial draft by
-encoding the target through the schema.
+encoded target. Otherwise `LensForm.make` obtains the initial draft by encoding
+the target through the schema.
 
 ## Focus into subforms
 
@@ -427,14 +425,14 @@ const AppointmentSchema = Schema.Struct({
 const AppointmentView = Component.make("Appointment")(function* () {
   const [form, startsAtField] = yield* Component.useOnMount(() =>
     Effect.gen(function* () {
-      const form = yield* MutationForm.service({
+      const form = yield* MutationForm.make({
         schema: AppointmentSchema,
         initialEncodedValue: { startsAt: "" },
         f: ([appointment]) =>
           Effect.log(
             `Saving ${DateTime.formatIso(appointment.startsAt)}`,
           ),
-      })
+      }).pipe(MutationForm.thenRun)
 
       return [form, Form.focusObjectOn(form, "startsAt")] as const
     }),
