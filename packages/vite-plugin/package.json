@@ -33,7 +33,7 @@
     "clean:modules": "rm -rf node_modules"
   },
   "dependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.0"
   },
   "devDependencies": {
     "effect-view": "workspace:*",

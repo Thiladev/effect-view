@@ -34,7 +34,7 @@
     "@docusaurus/types": "^3.10.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.0"
   },
   "browserslist": {
     "production": [
