@@ -248,6 +248,33 @@ workflows that need to wait for the final success or failure state.
 Invalidating does not itself refetch. Follow it with `refreshView`, change the
 key, or allow a later fetch to repopulate the cache.
 
+### Refresh on an interval
+
+Refresh every five minutes, starting after five minutes:
+
+```ts
+import { Schedule } from "effect"
+
+yield* query.pipe(
+  Query.withScheduledRefresh(Schedule.spaced("5 minutes")),
+)
+```
+
+Limit the number of refreshes:
+
+```ts
+yield* query.pipe(
+  Query.withScheduledRefresh(
+    Schedule.spaced("5 minutes").pipe(
+      Schedule.upTo({ times: 3 }),
+    ),
+  ),
+)
+```
+
+The refresh fiber stops with the surrounding scope. The Effect returns the
+original query. Cache and `staleTime` rules still apply.
+
 ## Staleness and cache lifetime
 
 `staleTime` controls how long a successful result can satisfy a fetch without

@@ -40,6 +40,13 @@ jobs:
           access: public
           token: ${{ secrets.NPM_TOKEN }}
           registry: https://registry.npmjs.org
+      - name: Publish @effect-view/vite-plugin
+        uses: JS-DevTools/npm-publish@v4
+        with:
+          package: packages/vite-plugin
+          access: public
+          token: ${{ secrets.NPM_TOKEN }}
+          registry: https://registry.npmjs.org
       - name: Publish effect-fc
         uses: JS-DevTools/npm-publish@v4
         with:
