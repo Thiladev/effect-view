@@ -38,7 +38,7 @@
   "devDependencies": {
     "effect-view": "workspace:*",
     "vite": "^8.0.16",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.0"
   },
   "peerDependencies": {
     "effect-view": "^0.1.0",
