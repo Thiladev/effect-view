@@ -254,6 +254,13 @@ Use `Form.useOptionalInput` when the encoded field is an Effect `Option`. It
 returns `value` and `setValue` together with `enabled` and `setEnabled`, making
 it suitable for an optional input that the user can toggle on and off.
 
+Use `Form.useStatus` for displayed form status. It debounces short-lived state
+changes, avoiding flicker in pending indicators.
+
+```tsx
+const { isValidating, isCommitting, canCommit } = yield* Form.useStatus(form)
+```
+
 `useInput` and `useOptionalInput` can be used directly, but they are primarily
 building blocks for your own reusable input components. A component library
 can wrap them to consistently handle labels, validation issues, validating
@@ -299,11 +306,8 @@ export const TextFieldFormInputView = Component.make(
   >,
 ) {
   const input = yield* Form.useInput(props.form, props)
-  const [issues, isValidating, isCommitting] = yield* View.useAll([
-    props.form.issues,
-    props.form.isValidating,
-    props.form.isCommitting,
-  ])
+  const [issues] = yield* View.useAll([props.form.issues])
+  const { isValidating, isCommitting } = yield* Form.useStatus(props.form)
 
   return (
     <Flex direction="column" gap="1">
@@ -351,8 +355,9 @@ They expose the schema pipeline as reactive Lenses and Views:
 | `isCommitting` | Whether a mutation or target write is in progress. |
 
 The form model itself is Effect code. Effect View adds the React-facing hooks,
-including `Form.useInput` and `Form.useOptionalInput`, while your own component
-library remains responsible for rendering controls and layout.
+including `Form.useInput`, `Form.useOptionalInput`, and `Form.useStatus`, while
+your own component library remains responsible for rendering controls and
+layout.
 
 ## Example: local date input, UTC domain value
 
@@ -415,7 +420,7 @@ the mutation receives UTC:
 
 ```tsx
 import { DateTime, Effect, Schema } from "effect"
-import { Component, Form, MutationForm, View } from "effect-view"
+import { Component, Form, MutationForm } from "effect-view"
 import { DateTimeUtcFromZonedInput } from "./DateTimeUtcFromZonedInput"
 
 const AppointmentSchema = Schema.Struct({
@@ -439,7 +444,7 @@ const AppointmentView = Component.make("Appointment")(function* () {
   )
 
   const startsAt = yield* Form.useInput(startsAtField)
-  const [canCommit] = yield* View.useAll([form.canCommit])
+  const { canCommit } = yield* Form.useStatus(form)
   const runPromise = yield* Component.useRunPromise()
 
   return (

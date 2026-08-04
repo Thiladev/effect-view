@@ -27,15 +27,15 @@
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.0-beta.102",
+    "@effect/platform-browser": "4.0.0-beta.103",
     "@radix-ui/themes": "^3.3.0",
-    "effect": "4.0.0-beta.102",
+    "effect": "4.0.0-beta.103",
     "effect-view": "workspace:*",
     "react-icons": "^5.6.0"
   },
   "overrides": {
     "@types/react": "^19.2.15",
-    "effect": "4.0.0-beta.102",
+    "effect": "4.0.0-beta.103",
     "react": "^19.2.6"
   }
 }

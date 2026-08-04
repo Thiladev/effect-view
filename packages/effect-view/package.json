@@ -1,7 +1,7 @@
 {
   "name": "effect-view",
   "description": "Write React function components with Effect",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "files": [
     "./README.md",
@@ -97,19 +97,19 @@
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@effect/platform-browser": "4.0.0-beta.102",
+    "@effect/platform-browser": "4.0.0-beta.103",
     "@testing-library/react": "^16.3.0",
-    "effect": "4.0.0-beta.102",
+    "effect": "4.0.0-beta.103",
     "jsdom": "^26.1.0",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "@types/react": "^19.2.0",
-    "effect": "4.0.0-beta.102",
+    "effect": "4.0.0-beta.103",
     "react": "^19.2.0"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "effect-lens": "^2.0.1-beta.102"
+    "effect-lens": "2.0.1-beta.103"
   }
 }

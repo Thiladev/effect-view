@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { Array, type Cause, Chunk, type Duration, Effect, Equal, Function, identity, Option, Pipeable, Predicate, type Scope, Stream, SubscriptionRef } from "effect"
-import type * as React from "react"
+import * as React from "react"
 import * as Component from "./Component.js"
 import * as Lens from "./Lens.js"
 import * as View from "./View.js"
@@ -155,6 +155,47 @@ export const focusChunkAt: {
     )
 })
 
+
+export declare namespace useStatus {
+    export interface Options {
+        /**
+         * The debounce interval applied to changes in the returned status.
+         *
+         * Defaults to 250 milliseconds.
+         */
+        readonly debounce?: Duration.Input
+    }
+
+    export interface Success {
+        readonly isValidating: boolean
+        readonly isCommitting: boolean
+        readonly canCommit: boolean
+    }
+}
+
+/**
+ * Subscribes to form status flags for presentation.
+ *
+ * Status changes are debounced to avoid transient UI feedback. The underlying
+ * form state is not changed.
+ */
+export const useStatus = Effect.fnUntraced(function* <P extends readonly PropertyKey[], A, I, ER, EW>(
+    form: Form<P, A, I, ER, EW>,
+    options?: useStatus.Options,
+): Effect.fn.Return<useStatus.Success, ER, Scope.Scope> {
+    const views = React.useMemo(() => {
+        const debounce = options?.debounce ?? "250 millis"
+
+        return [
+            View.mapStream(form.isValidating, Stream.debounce(debounce)),
+            View.mapStream(form.isCommitting, Stream.debounce(debounce)),
+            View.mapStream(form.canCommit, Stream.debounce(debounce)),
+        ] as const
+    }, [form, options?.debounce])
+
+    const [isValidating, isCommitting, canCommit] = yield* View.useAll(views)
+    return { isValidating, isCommitting, canCommit }
+})
 
 export namespace useInput {
     export interface Options {
