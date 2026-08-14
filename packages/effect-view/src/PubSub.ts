@@ -11,7 +11,7 @@ export const useFromReactiveValues = Effect.fnUntraced(function* <const A extend
     const pubsub = yield* Component.useOnMount(() => Effect.acquireRelease(PubSub.unbounded<A>(), PubSub.shutdown))
     yield* Component.useReactEffect(() => Effect.flatMap(
         PubSub.isShutdown(pubsub),
-        shutdown => shutdown ? Effect.succeed(undefined) : Effect.asVoid(PubSub.publish(pubsub, values)),
+        shutdown => shutdown ? Effect.void : Effect.asVoid(PubSub.publish(pubsub, values)),
     ), values)
     return pubsub
 })

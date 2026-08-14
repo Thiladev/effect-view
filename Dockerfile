@@ -9,4 +9,4 @@ RUN bun install --frozen-lockfile && \
     bun run build && \
     bun clean:cache && \
     bun clean:modules && \
-    bun install --production --frozen-lockfile
+    bun install --production --frozen-lockfile --ignore-scripts

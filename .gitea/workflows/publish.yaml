@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
-      - name: Clone repo
+      - name: Checkout
         uses: actions/checkout@v6
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -55,11 +55,6 @@ jobs:
           token: ${{ secrets.NPM_TOKEN }}
           registry: https://registry.npmjs.org
 
-      - name: Clean before Docker build
-        run: |
-          bun clean:cache
-          bun clean:dist
-          bun clean:modules
       - name: Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v5

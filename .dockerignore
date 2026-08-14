@@ -1,0 +1,52 @@
+# Version control and local agent/editor metadata
+.git
+.gitea
+.github
+.agents
+.codex
+.vscode
+
+# Dependencies and package-manager caches
+node_modules
+.npm
+.yarn
+.pnpm-store
+.bun
+
+# Build output and task-runner caches
+dist
+build
+out
+.turbo
+*.tsbuildinfo
+.cache
+.parcel-cache
+.docusaurus
+.vite
+*.vite*
+
+# Test, coverage, and diagnostic output
+coverage
+.nyc_output
+*.lcov
+reports
+report.*.json
+
+# Logs and temporary files
+*.log
+*.pid
+*.seed
+tmp
+temp
+*.tmp
+*.swp
+*.swo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Package artifacts
+*.tgz
+*.tar

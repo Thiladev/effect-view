@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import { Array, Cause, type Context, Effect, Fiber, Option, Pipeable, Predicate, Schema, SchemaError, SchemaIssue, type Scope, Semaphore, SubscriptionRef } from "effect"
+import { Array, Cause, type Context, Effect, Fiber, Option, Pipeable, Predicate, Schema, SchemaIssue, type Scope, Semaphore, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/unstable/reactivity"
 import * as Form from "./Form.js"
 import * as Lens from "./Lens.js"
@@ -112,7 +112,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
             Effect.tap(() => Lens.set(this.issues, Array.empty())),
             Effect.flatMap(value => Lens.set(this.value, Option.some(value))),
             Effect.catchIf(
-                SchemaError.isSchemaError,
+                Schema.isSchemaError,
                 error => Lens.set(this.issues, SchemaIssue.makeFormatterStandardSchemaV1()(error.issue).issues),
             ),
 
@@ -145,7 +145,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
                     ? Option.match(
                         Array.findFirst(
                             result.cause.reasons,
-                            reason => Cause.isFailReason(reason) && SchemaError.isSchemaError(reason.error)
+                            reason => Cause.isFailReason(reason) && Schema.isSchemaError(reason.error)
                                 ? Option.some(reason.error)
                                 : Option.none(),
                         ),

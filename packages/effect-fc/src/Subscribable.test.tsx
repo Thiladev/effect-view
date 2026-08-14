@@ -51,7 +51,7 @@ describe("Subscribable", () => {
         await Effect.runPromise(Lens.set(right, "b"))
         await waitFor(() => expect(values).toContainEqual([2, "b"]))
 
-        Fiber.interruptFork(collector)
+        await Effect.runPromise(Fiber.interrupt(collector))
     })
 
     it("useAll returns the latest values and rerenders when any input changes", async () => {

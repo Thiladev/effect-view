@@ -25,12 +25,12 @@ data modeling into React 19 without replacing React's component model. Yield
 Effects and services from a component body, let scopes follow the React
 lifecycle, and return ordinary JSX.
 
-> **Effect v4 beta:** Effect View is built for the Effect v4 beta release. If
+> **Effect v4 RC:** Effect View is built for the Effect v4 release candidate. If
 > your application uses Effect v3, use the legacy
 > [`effect-fc` package](https://www.npmjs.com/package/effect-fc) instead.
 
 ```bash
-npm install effect-view effect@beta react
+npm install effect-view effect@rc react
 ```
 
 Effect View does not depend on `react-dom`. Install the renderer used by your
@@ -127,7 +127,7 @@ The complete documentation is available at **[thila.dev/effect-view](https://thi
 ## Requirements
 
 - React 19.2 or newer
-- **Effect v4 beta** (`effect@beta`)
+- **Effect v4 RC** (`effect@rc`)
 - TypeScript and `@types/react` for TypeScript projects
 
 Effect View is renderer-independent and does not require `react-dom`.
