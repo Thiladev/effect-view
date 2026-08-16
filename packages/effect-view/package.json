@@ -32,6 +32,10 @@
       "types": "./dist/Form.d.ts",
       "default": "./dist/Form.js"
     },
+    "./I18n": {
+      "types": "./dist/I18n.d.ts",
+      "default": "./dist/I18n.js"
+    },
     "./Lens": {
       "types": "./dist/Lens.d.ts",
       "default": "./dist/Lens.js"
@@ -39,6 +43,10 @@
     "./LensForm": {
       "types": "./dist/LensForm.d.ts",
       "default": "./dist/LensForm.js"
+    },
+    "./Locale": {
+      "types": "./dist/Locale.d.ts",
+      "default": "./dist/Locale.js"
     },
     "./Memoized": {
       "types": "./dist/Memoized.d.ts",
