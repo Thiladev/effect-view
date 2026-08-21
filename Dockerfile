@@ -1,6 +1,6 @@
-FROM oven/bun:1.3.12-debian@sha256:1b709c9dd883fc1af38c210f7ea5222c552a8d470ea73efbd4b8fcfee798a64b AS bun
+FROM oven/bun:1.4.0-debian@sha256:5bb0f9be3a1a36a03e27c9a9dd894a3b1ad26657155c7df4dda771e17bf872ef AS bun
 
-FROM node:22.21.1-trixie-slim@sha256:98e1429d1a0b99378b4de43fa385f0746fd6276faf4feeb6104d91f6bad290f9
+FROM node:24.19.0-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bunx /usr/local/bin/
 COPY . /app
 WORKDIR /app

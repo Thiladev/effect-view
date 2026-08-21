@@ -41,20 +41,7 @@ class AppState extends Context.Service<AppState, {
 }
 
 
-const LensFormPageView = Component.make("LensFormPageView")(function*() {
-    yield* Component.useOnMount(() => Effect.gen(function*() {
-        yield* Effect.addFinalizer(() => Console.log("LensForm route unmounted"))
-        yield* Console.log("LensForm route mounted")
-    }))
-
-    const context = yield* Component.useLayer(AppState.layer)
-    const UserProfileEditor = yield* Effect.provide(UserProfileEditorView.use, context)
-
-    return <UserProfileEditor />
-})
-
-
-const UserProfileEditorView = Component.make("UserProfileEditorView")(function*() {
+const LensFormPageView = Component.make("LensFormPage")(function*() {
     const appState = yield* AppState
 
     const [
@@ -106,7 +93,9 @@ const UserProfileEditorView = Component.make("UserProfileEditorView")(function*(
             </form>
         </Container>
     )
-})
+}).pipe(
+    Component.provide(AppState.layer),
+)
 
 
 export const Route = createFileRoute("/lensform")({

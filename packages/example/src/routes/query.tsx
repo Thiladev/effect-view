@@ -87,7 +87,7 @@ const QueryRouteComponent = Component.make("QueryRouteView")(function*() {
                     </Button>
                 </Flex>
 
-                <PostResultView result={mutationState} />
+                <PostResultView result={mutationState.result} />
 
                 <Button onClick={() => runSync(mutation.mutateView([id]))}>
                     Mutate

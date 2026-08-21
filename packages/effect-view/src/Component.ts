@@ -607,6 +607,57 @@ export const withOptions: {
     Object.getPrototypeOf(self),
 ))
 
+export declare namespace provide {
+    export type Result<T extends Component.Any, ROut, E, RIn> = (
+        & Omit<T, keyof Component.AsComponent<T>>
+        & Component<
+            Component.Props<T>,
+            Component.Success<T>,
+            Component.Error<T> | E,
+            Exclude<Component.Context<T>, ROut> | RIn,
+            Component.Function<T>
+        >
+    )
+}
+
+/**
+ * Provides a layer to an Effect View component.
+ *
+ * The layer is built once for each mounted instance of the returned component and
+ * is released when that instance unmounts. Any services still required by the
+ * layer remain requirements of the returned component.
+ *
+ * @example
+ * ```tsx
+ * const TodosViewLive = Component.provide(TodosView, TodosService.Default)
+ *
+ * // Equivalent pipeline form
+ * const TodosViewLive = TodosView.pipe(
+ *   Component.provide(TodosService.Default),
+ * )
+ * ```
+ */
+export const provide: {
+    <ROut, E, RIn>(
+        layer: Layer.Layer<ROut, E, RIn>,
+    ): <T extends Component.Any>(self: T) => provide.Result<T, ROut, E, RIn>
+    <T extends Component.Any, ROut, E, RIn>(
+        self: T,
+        layer: Layer.Layer<ROut, E, RIn>,
+    ): provide.Result<T, ROut, E, RIn>
+} = Function.dual(2, <T extends Component.Any, ROut, E, RIn>(
+    self: T,
+    layer: Layer.Layer<ROut, E, RIn>,
+): provide.Result<T, ROut, E, RIn> => Object.setPrototypeOf(
+    Object.assign(function() {}, self, {
+        body: (props: Component.Props<T>) => Effect.flatMap(
+            useLayer(layer),
+            context => Effect.provide(self.body(props), context),
+        ),
+    }),
+    Object.getPrototypeOf(self),
+))
+
 /**
  * Wraps an Effect View Component and converts it into a standard React function component,
  * serving as an **entrypoint** into an Effect View component hierarchy.
@@ -1047,7 +1098,7 @@ export const useCallbackPromise = Effect.fnUntraced(function* <Args extends unkn
     return React.useCallback((...args: Args) => Effect.runPromiseWith(contextRef.current)(f(...args)), deps)
 })
 
-export declare namespace useContext {
+export declare namespace useLayer {
     export interface Options extends useOnChange.Options {}
 }
 
@@ -1112,7 +1163,7 @@ export declare namespace useContext {
  */
 export const useLayer = <ROut, E, RIn>(
     layer: Layer.Layer<ROut, E, RIn>,
-    options?: useContext.Options,
+    options?: useLayer.Options,
 ): Effect.Effect<Context.Context<ROut>, E, RIn | Scope.Scope> => useOnChange(() => Effect.flatMap(
     Effect.context<RIn>(),
     context => Layer.build(Layer.provide(layer, Layer.succeedContext(context))),

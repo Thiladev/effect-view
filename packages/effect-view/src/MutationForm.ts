@@ -23,7 +23,14 @@ extends Form.Form<readonly [], A, I, never, never> {
     readonly validationFiber: View.View<Option.Option<Fiber.Fiber<A, Schema.SchemaError>>, never, never>
 
     readonly run: Effect.Effect<void>
-    readonly submit: Effect.Effect<Option.Option<AsyncResult.Success<MA, ME> | AsyncResult.Failure<MA, ME>>, Cause.NoSuchElementError>
+    readonly submit: Effect.Effect<
+        Option.Option<Mutation.FinalMutationState<
+            readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
+            MA, ME
+        >>,
+        Cause.NoSuchElementError,
+        never
+    >
 }
 
 export class MutationFormImpl<in out A, in out I = A, in out RD = never, in out RE = never, out MA = void, out ME = never, in out MR = never>
@@ -79,17 +86,20 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
         this.canCommit = Effect.succeed(this).pipe(
             Effect.map(self => View.map(
                 View.zipLatestAll(self.value, self.issues, self.validationFiber, self.mutation.state),
-                ([value, issues, validationFiber, result]) => (
+                ([value, issues, validationFiber, state]) => (
                     Option.isSome(value) &&
                     Array.isReadonlyArrayEmpty(issues) &&
                     Option.isNone(validationFiber) &&
-                    !AsyncResult.isWaiting(result)
+                    !AsyncResult.isWaiting(state.result)
                 ),
             )),
             View.unwrap,
         )
         this.isCommitting = Effect.succeed(this).pipe(
-            Effect.map(self => View.map(self.mutation.state, AsyncResult.isWaiting)),
+            Effect.map(self => View.map(
+                self.mutation.state,
+                state => AsyncResult.isWaiting(state.result),
+            )),
             View.unwrap,
         )
     }
@@ -130,21 +140,35 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
         )
     }
 
-    get submit(): Effect.Effect<Option.Option<AsyncResult.Success<MA, ME> | AsyncResult.Failure<MA, ME>>, Cause.NoSuchElementError, never> {
+    get submit(): Effect.Effect<
+        Option.Option<Mutation.FinalMutationState<
+            readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
+            MA, ME
+        >>,
+        Cause.NoSuchElementError,
+        never
+    > {
         return Lens.get(this.value).pipe(
             Effect.flatMap(Effect.fromOption),
             Effect.flatMap(value => this.submitValue(value)),
         )
     }
 
-    submitValue(value: A): Effect.Effect<Option.Option<AsyncResult.Success<MA, ME> | AsyncResult.Failure<MA, ME>>, never, never> {
+    submitValue(value: A): Effect.Effect<
+        Option.Option<Mutation.FinalMutationState<
+            readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
+            MA, ME
+        >>,
+        never,
+        never
+    > {
         return Effect.when(
             Effect.tap(
                 this.mutation.mutate([value, this as any]),
-                result => AsyncResult.isFailure(result)
+                state => AsyncResult.isFailure(state.result)
                     ? Option.match(
                         Array.findFirst(
-                            result.cause.reasons,
+                            state.result.cause.reasons,
                             reason => Cause.isFailReason(reason) && Schema.isSchemaError(reason.error)
                                 ? Option.some(reason.error)
                                 : Option.none(),
