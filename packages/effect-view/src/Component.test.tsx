@@ -10,11 +10,56 @@ import * as ScopeRegistry from "./ScopeRegistry.js"
 
 class ValueService extends Context.Service<ValueService, { readonly value: string }>()("ValueService") {}
 
+class ParentService extends Context.Service<ParentService, { readonly prefix: string }>()("ParentService") {}
+
 afterEach(() => {
     vi.useRealTimers()
 })
 
 describe("Component", () => {
+    it("provides a layer once per mounted component instance", async () => {
+        const setup = vi.fn()
+        const cleanup = vi.fn()
+        const serviceLayer = Layer.effect(ValueService, Effect.gen(function*() {
+            const parent = yield* ParentService
+            yield* Effect.sync(setup)
+            yield* Effect.addFinalizer(() => Effect.sync(cleanup))
+            return { value: `${parent.prefix} value` }
+        }))
+        const runtime = ReactRuntime.make(Layer.succeed(ParentService, { prefix: "provided" }))
+        const effectRuntime = await runtime.runtime.context()
+
+        const Probe = Component.makeUntraced("ProvidedServiceProbe")(function*() {
+            const service = yield* ValueService
+            return <div>{service.value}</div>
+        }).pipe(
+            Component.provide(serviceLayer),
+            Component.withContext(runtime.context),
+        )
+
+        const view = render(
+            <runtime.context.Provider value={effectRuntime}>
+                <Probe />
+            </runtime.context.Provider>
+        )
+
+        expect(await screen.findByText("provided value")).toBeTruthy()
+        expect(setup).toHaveBeenCalledTimes(1)
+
+        view.rerender(
+            <runtime.context.Provider value={effectRuntime}>
+                <Probe />
+            </runtime.context.Provider>
+        )
+
+        expect(await screen.findByText("provided value")).toBeTruthy()
+        expect(setup).toHaveBeenCalledTimes(1)
+
+        view.unmount()
+        await waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1))
+        await runtime.runtime.dispose()
+    })
+
     it("does not rerun useOnMount across rerenders after Strict Mode initialization", async () => {
         const onMount = vi.fn(() => Effect.succeed("mounted"))
         const runtime = ReactRuntime.make(Layer.empty)

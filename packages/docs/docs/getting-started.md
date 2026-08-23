@@ -469,24 +469,59 @@ Prefer regular React state for simple, component-local UI concerns. Use
 `Lens`/`View` when state needs Effect integration, subscriptions, focusing, or
 sharing. The [State Management guide](./state-management) covers that model.
 
-## Provide services to a subtree
+## Provide services to a component
 
-Use `Component.useLayer` when only one Effect View subtree needs extra
-services. It builds the layer in a scope and returns the resulting Effect
-context:
+Use `Component.provide` to give a component a static layer:
 
-```tsx title="src/GreetingPageView.tsx"
-import { Effect } from "effect"
+```tsx title="src/GreetingViewLive.tsx"
 import { Component } from "effect-view"
 import { GreetingView } from "./GreetingView"
 import { GreetingService } from "./GreetingService"
 
+export const GreetingViewLive = Component.provide(
+  GreetingView,
+  GreetingService.layer,
+)
+```
+
+The pipeline form is equivalent:
+
+```tsx
+export const GreetingViewLive = GreetingView.pipe(
+  Component.provide(GreetingService.layer),
+)
+```
+
+`Component.provide` builds the layer for each mounted component instance and
+releases its resources when that instance unmounts.
+
+The layer is constructed during render and must acquire synchronously unless
+the component is enhanced with [`Async.async`](./async).
+
+## Provide services to a subtree
+
+Use `Component.useLayer` to provide a layer from a component to its Effect View
+subcomponents. This is also the right choice when the layer depends on props,
+state, or context read inside React: memoize the layer and provide its context
+manually.
+
+```tsx title="src/GreetingPageView.tsx"
+import { Effect, Layer } from "effect"
+import { Component } from "effect-view"
+import * as React from "react"
+import { GreetingView } from "./GreetingView"
+import { GreetingService } from "./GreetingService"
+
 export const GreetingPageView = Component.make("GreetingPage")(
-  function* () {
-    const context = yield* Component.useLayer(GreetingService.layer)
-    const Greeting = yield* GreetingView.use.pipe(
-      Effect.provide(context),
+  function* (props: { readonly greeting: string }) {
+    const layer = React.useMemo(
+      () => Layer.succeed(GreetingService, {
+        greet: (name) => `${props.greeting}, ${name}`,
+      }),
+      [props.greeting],
     )
+    const context = yield* Component.useLayer(layer)
+    const Greeting = yield* Effect.provide(GreetingView.use, context)
 
     return <Greeting name="Effect" />
   },
