@@ -78,8 +78,10 @@ extends Pipeable.Class implements Mutation<K, A, E, R> {
         Scope.Scope | R
     > {
         return Effect.gen({ self: this }, function*() {
+            const currentKey = Option.some(key) as Option.Some<K>
+
             const previous: MutationState<K, A, E> = Option.getOrElse(yield* Lens.get(this.latestFinalState), () => ({
-                key: Option.some(key) as Option.Some<K>,
+                key: currentKey,
                 result: AsyncResult.initial(),
             }))
             const state = yield* makeMutationStateLens(previous)
@@ -89,17 +91,17 @@ extends Pipeable.Class implements Mutation<K, A, E, R> {
                     state,
                     previous => AsyncResult.match(previous.result, {
                         onInitial: () => ({
-                            key: previous.key,
+                            key: currentKey,
                             result: AsyncResult.initial(true),
                         }),
                         onSuccess: result => ({
-                            key: previous.key,
+                            key: currentKey,
                             result: AsyncResult.success(result.value, {
                                 waiting: true,
                             }),
                         }),
                         onFailure: result => ({
-                            key: previous.key,
+                            key: currentKey,
                             result: AsyncResult.failure(result.cause, {
                                 waiting: true,
                                 previousSuccess: result.previousSuccess,
@@ -108,7 +110,7 @@ extends Pipeable.Class implements Mutation<K, A, E, R> {
                     }
                 )),
 
-                Effect.onExit(this.f(previous.key.value), exit => Effect.gen({ self: this }, function*() {
+                Effect.onExit(this.f(key), exit => Effect.gen({ self: this }, function*() {
                     const fiberId = yield* Effect.fiberId
                     const fiber = yield* Lens.get(this.fiber)
 
@@ -119,24 +121,24 @@ extends Pipeable.Class implements Mutation<K, A, E, R> {
                         state,
                         previous => Exit.match(exit, {
                             onSuccess: v => ({
-                                key: previous.key,
+                                key: currentKey,
                                 result: AsyncResult.success(v),
                             }),
                             onFailure: c => Cause.hasInterruptsOnly(c)
                                 ? previous
                                 : AsyncResult.match(previous.result, {
                                     onInitial: () => ({
-                                        key: previous.key,
+                                        key: currentKey,
                                         result: AsyncResult.failure(c),
                                     }),
                                     onSuccess: v => ({
-                                        key: previous.key,
+                                        key: currentKey,
                                         result: AsyncResult.failure(c, {
                                             previousSuccess: Option.some(v),
                                         }),
                                     }),
                                     onFailure: v => ({
-                                        key: previous.key,
+                                        key: currentKey,
                                         result: AsyncResult.failure(c, {
                                             previousSuccess: v.previousSuccess,
                                         }),

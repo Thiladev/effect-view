@@ -33,11 +33,10 @@ interface ComponentImports {
 
 interface Definition {
     readonly expression: ts.Expression
-    readonly factoryCall: ts.CallExpression
+    readonly wrapTarget: ts.Expression
     readonly body: ts.FunctionLikeDeclaration | undefined
     readonly id: string
-    readonly pipeline: ts.CallExpression | undefined
-    readonly entrypointIndex: number
+    readonly site: EntrypointSite.Pipe | undefined
 }
 
 const defaultInclude = /\.[cm]?[jt]sx?$/
@@ -140,6 +139,13 @@ const findFactoryCall = (
         if (result)
             return
 
+        // Never look inside a nested function body: a factory call there
+        // belongs to a different, unrelated component (e.g. one composed
+        // dynamically inside this component's own render), not to the
+        // composition shape of the definition being analyzed.
+        if (node !== root && ts.isFunctionLike(node))
+            return
+
         if (ts.isCallExpression(node)) {
             if (isFactoryCallee(node.expression, imports)) {
                 result = {
@@ -165,18 +171,83 @@ const findFactoryCall = (
     return result
 }
 
-const isPipeline = (expression: ts.Expression): expression is ts.CallExpression =>
-    ts.isCallExpression(expression)
-    && ts.isPropertyAccessExpression(expression.expression)
-    && expression.expression.name.text === "pipe"
+const isPipeline = (node: ts.Node): node is ts.CallExpression =>
+    ts.isCallExpression(node)
+    && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === "pipe"
 
-const isEntrypoint = (expression: ts.Expression): boolean => {
-    if (!ts.isCallExpression(expression))
-        return false
+const entrypointName = (callee: ts.Expression): boolean =>
+    ts.isPropertyAccessExpression(callee)
+    && (callee.name.text === "withRuntime" || callee.name.text === "withContext")
 
-    const callee = expression.expression
-    return ts.isPropertyAccessExpression(callee)
-        && (callee.name.text === "withRuntime" || callee.name.text === "withContext")
+/**
+ * A curried entrypoint call (`withContext(context)`) used as one step of a
+ * `.pipe(...)` chain: the descriptor produced by the preceding steps must be
+ * registered *before* this step runs, since it is what converts the
+ * descriptor into a plain React function component.
+ */
+const isEntrypoint = (expression: ts.Expression): boolean =>
+    ts.isCallExpression(expression) && entrypointName(expression.expression)
+
+/**
+ * The data-first form of an entrypoint call (`withContext(descriptor,
+ * context)`), which can appear anywhere - not only inside a `.pipe(...)`
+ * chain - and always takes the descriptor to convert as its first argument.
+ */
+const isEntrypointDataFirst = (node: ts.Node): node is ts.CallExpression =>
+    ts.isCallExpression(node)
+    && entrypointName(node.expression)
+    && node.arguments.length >= 2
+
+declare namespace EntrypointSite {
+    export interface Pipe {
+        readonly kind: "pipe"
+        readonly pipeCall: ts.CallExpression
+        readonly argIndex: number
+    }
+
+    export interface DataFirst {
+        readonly kind: "dataFirst"
+        readonly call: ts.CallExpression
+    }
+}
+
+type EntrypointSite = EntrypointSite.Pipe | EntrypointSite.DataFirst
+
+/**
+ * Finds where, anywhere within a definition's composition expression, a
+ * descriptor is converted into a plain React function component - whether
+ * through a `.pipe(..., withContext(context))` chain or a direct
+ * `withContext(descriptor, context)` call. Does not look inside nested
+ * function bodies, for the same reason as `findFactoryCall`.
+ */
+const findEntrypointSite = (root: ts.Node): EntrypointSite | undefined => {
+    let result: EntrypointSite | undefined
+
+    const visit = (node: ts.Node): void => {
+        if (result)
+            return
+
+        if (node !== root && ts.isFunctionLike(node))
+            return
+
+        if (isPipeline(node)) {
+            const argIndex = node.arguments.findIndex(isEntrypoint)
+            if (argIndex >= 0) {
+                result = { kind: "pipe", pipeCall: node, argIndex }
+                return
+            }
+        }
+        else if (isEntrypointDataFirst(node)) {
+            result = { kind: "dataFirst", call: node }
+            return
+        }
+
+        ts.forEachChild(node, visit)
+    }
+
+    visit(root)
+    return result
 }
 
 const makeDefinition = (
@@ -185,25 +256,33 @@ const makeDefinition = (
     imports: ComponentImports,
 ): Definition | undefined => {
     const factory = findFactoryCall(expression, imports)
+    const site = findEntrypointSite(expression)
+
+    // A `.pipe(..., withContext(context))` chain always needs the splice
+    // treatment, whether or not a factory call could be found in this same
+    // statement (its base may be a component defined elsewhere).
+    if (site?.kind === "pipe")
+        return { expression, wrapTarget: expression, body: factory?.body, id, site }
+
+    // `withContext(descriptor, context)` always needs its descriptor
+    // argument wrapped directly, since by the time the call returns the
+    // result is a plain function component, not a Component descriptor.
+    if (site?.kind === "dataFirst") {
+        const target = site.call.arguments[0]
+        if (!target)
+            return undefined
+        return { expression, wrapTarget: target, body: factory?.body, id, site: undefined }
+    }
+
+    // No entrypoint conversion happens within this statement: the
+    // descriptor remains a Component.Any throughout, however it got here
+    // (a bare factory call, a `.pipe()` of traits with no withContext, or a
+    // user-defined composition helper wrapping either) - safe to register
+    // the whole expression.
     if (!factory)
         return undefined
 
-    const pipeline = isPipeline(expression) ? expression : undefined
-    if (expression !== factory.factoryCall && !pipeline)
-        return undefined
-
-    const entrypointIndex = pipeline
-        ? pipeline.arguments.findIndex(isEntrypoint)
-        : -1
-
-    return {
-        expression,
-        factoryCall: factory.factoryCall,
-        body: factory.body,
-        id,
-        pipeline,
-        entrypointIndex,
-    }
+    return { expression, wrapTarget: expression, body: factory.body, id, site: undefined }
 }
 
 const collectDefinitions = (
@@ -260,9 +339,19 @@ const collectDefinitions = (
     return definitions
 }
 
+/**
+ * Computes a signature for the *shape* of a component's hook calls: the
+ * ordered sequence of hook names it calls at its top level, ignoring
+ * everything else (argument contents, dependency array entries, unrelated
+ * logic). Two bodies calling the same hooks in the same order hash to the
+ * same signature even if most of their code differs, so edits that don't
+ * touch which hooks run - the overwhelming majority of edits - refresh in
+ * place instead of forcing a remount. This mirrors how React's own Fast
+ * Refresh only forces a remount when the hook call sequence itself changes,
+ * not when a hook's arguments or the surrounding logic change.
+ */
 const hookSignature = (
     body: ts.FunctionLikeDeclaration | undefined,
-    sourceFile: ts.SourceFile,
 ): string => {
     if (!body?.body)
         return "unknown"
@@ -276,14 +365,18 @@ const hookSignature = (
 
         if (ts.isCallExpression(node)) {
             const callee = node.expression
-            const name = ts.isIdentifier(callee)
+            const localName = ts.isIdentifier(callee)
                 ? callee.text
                 : ts.isPropertyAccessExpression(callee)
                     ? callee.name.text
                     : undefined
 
-            if (name && /^use[A-Z0-9]/.test(name))
-                hooks.push(node.getText(sourceFile))
+            if (localName && /^use[A-Z0-9]/.test(localName)) {
+                const qualifier = ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)
+                    ? `${callee.expression.text}.`
+                    : ""
+                hooks.push(`${qualifier}${localName}`)
+            }
         }
 
         ts.forEachChild(node, visit)
@@ -384,10 +477,10 @@ export function effectView(
             const edits: Edit[] = []
 
             for (const definition of definitions) {
-                const signature = hookSignature(definition.body, sourceFile)
+                const signature = hookSignature(definition.body)
 
-                if (definition.pipeline && definition.entrypointIndex >= 0) {
-                    const entrypoint = definition.pipeline.arguments[definition.entrypointIndex]
+                if (definition.site?.kind === "pipe") {
+                    const entrypoint = definition.site.pipeCall.arguments[definition.site.argIndex]
                     if (!entrypoint)
                         continue
                     edits.push({
@@ -403,8 +496,8 @@ export function effectView(
                     continue
                 }
 
-                const start = definition.expression.getStart(sourceFile)
-                const end = definition.expression.end
+                const start = definition.wrapTarget.getStart(sourceFile)
+                const end = definition.wrapTarget.end
                 edits.push({
                     start,
                     end,

@@ -77,6 +77,29 @@ describe("Mutation", () => {
             expect(result.result.previousSuccess.value.value).toBe("saved")
     })
 
+    it("runs a second mutation with its own key, not the previous one", async () => {
+        const result = await runMutationTest(Effect.gen(function*() {
+            const calls: Array<string> = []
+            const mutation = yield* Mutation.make({
+                f: (key: string) => Effect.sync(() => {
+                    calls.push(key)
+                    return key
+                }),
+            })
+
+            const first = yield* mutation.mutate("a")
+            const second = yield* mutation.mutate("b")
+
+            return { calls, first, second }
+        }))
+
+        expect(result.calls).toEqual(["a", "b"])
+        expect(result.first.key.value).toBe("a")
+        expect(expectSuccessValue(result.first)).toBe("a")
+        expect(result.second.key.value).toBe("b")
+        expect(expectSuccessValue(result.second)).toBe("b")
+    })
+
     it("mutateView returns a waiting state without waiting for completion", async () => {
         const result = await runMutationTest(Effect.gen(function*() {
             const deferred = yield* Deferred.make<string>()

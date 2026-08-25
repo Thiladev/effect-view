@@ -1,7 +1,7 @@
 {
   "name": "@effect-view/vite-plugin",
   "description": "Vite Fast Refresh support for Effect View components",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "files": [
     "./README.md",

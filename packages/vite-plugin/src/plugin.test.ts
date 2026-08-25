@@ -135,4 +135,77 @@ export const Legacy = Component.makeUntraced(function*() {
 })
 `)).toBeUndefined()
     })
+
+    it("registers a component wrapped by a user-defined helper function", async () => {
+        const result = await transform(`
+import { Component } from "effect-view"
+
+const withLogging = (view) => view
+
+export const LoggedView = withLogging(Component.make("LoggedView")(function*() {
+    return <div />
+}))
+`)
+
+        expect(result).toContain("__effectViewRefresh(withLogging(Component.make(\"LoggedView\")")
+        expect(result).toContain("\"src/View.tsx:LoggedView\"")
+    })
+
+    it("wraps the descriptor argument of a data-first withContext call", async () => {
+        const result = await transform(`
+import { Component } from "effect-view"
+
+const HomeBase = Component.make("Home")(function*() {
+    return <div />
+})
+
+export const Home = Component.withContext(HomeBase, runtime.context)
+`)
+
+        expect(result).toContain("__effectViewRefresh(Component.make(\"Home\")")
+        expect(result).toContain("Component.withContext(__effectViewRefresh(HomeBase, import.meta.hot, \"src/View.tsx:Home\", \"unknown\", false), runtime.context)")
+    })
+
+    it("keeps the same hook signature when only literal content inside a hook call changes", async () => {
+        const before = await transform(`
+import { Component } from "effect-view"
+export const CounterView = Component.make("CounterView")(function*() {
+    const value = yield* Component.useOnMount(() => loadInitial(1))
+    return <div>{value}</div>
+})
+`)
+        const after = await transform(`
+import { Component } from "effect-view"
+export const CounterView = Component.make("CounterView")(function*() {
+    const value = yield* Component.useOnMount(() => loadInitial(2))
+    return <div>{value}</div>
+})
+`)
+
+        const signatureOf = (code: string | undefined) => code?.match(/"src\/View\.tsx:CounterView", "([a-z0-9]+)"/)?.[1]
+        expect(signatureOf(before)).toBeDefined()
+        expect(signatureOf(before)).toBe(signatureOf(after))
+    })
+
+    it("changes the hook signature when a hook call is added", async () => {
+        const before = await transform(`
+import { Component } from "effect-view"
+export const CounterView = Component.make("CounterView")(function*() {
+    const value = yield* Component.useOnMount(() => loadInitial())
+    return <div>{value}</div>
+})
+`)
+        const after = await transform(`
+import { Component } from "effect-view"
+export const CounterView = Component.make("CounterView")(function*() {
+    const value = yield* Component.useOnMount(() => loadInitial())
+    yield* Component.useReactEffect(() => trackView(), [])
+    return <div>{value}</div>
+})
+`)
+
+        const signatureOf = (code: string | undefined) => code?.match(/"src\/View\.tsx:CounterView", "([a-z0-9]+)"/)?.[1]
+        expect(signatureOf(before)).toBeDefined()
+        expect(signatureOf(before)).not.toBe(signatureOf(after))
+    })
 })
