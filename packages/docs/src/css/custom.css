@@ -1,37 +1,133 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap");
+
 :root {
-  --ifm-color-primary: #0b6f74;
-  --ifm-color-primary-dark: #096469;
-  --ifm-color-primary-darker: #085e63;
-  --ifm-color-primary-darkest: #074d51;
-  --ifm-color-primary-light: #0d7a7f;
-  --ifm-color-primary-lighter: #0e8085;
-  --ifm-color-primary-lightest: #109096;
-  --ifm-background-color: #fffaf1;
-  --ifm-code-font-size: 95%;
+  --ifm-color-primary: #059669;
+  --ifm-color-primary-dark: #04835d;
+  --ifm-color-primary-darker: #047857;
+  --ifm-color-primary-darkest: #036348;
+  --ifm-color-primary-light: #0aa876;
+  --ifm-color-primary-lighter: #10b981;
+  --ifm-color-primary-lightest: #34d399;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-footer-background-color: #09090b;
+
+  --ifm-code-font-size: 90%;
   --ifm-font-family-base:
-    "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-  --docusaurus-highlighted-code-line-bg: rgba(11, 111, 116, 0.1);
+    "Inter", "Segoe UI", "Helvetica Neue", sans-serif;
+  --ifm-font-family-monospace:
+    "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+  --ifm-heading-font-weight: 700;
+  --ifm-heading-letter-spacing: -0.02em;
+
+  --ifm-menu-color-background-active: rgba(5, 150, 105, 0.08);
+  --ifm-menu-color-background-hover: rgba(5, 150, 105, 0.06);
+
+  --docusaurus-highlighted-code-line-bg: rgba(5, 150, 105, 0.1);
+
+  --ev-zinc-50: #fafafa;
+  --ev-zinc-100: #f4f4f5;
+  --ev-zinc-200: #e4e4e7;
+  --ev-zinc-300: #d4d4d8;
+  --ev-zinc-400: #a1a1aa;
+  --ev-zinc-500: #71717a;
+  --ev-zinc-600: #52525b;
+  --ev-zinc-700: #3f3f46;
+  --ev-zinc-800: #27272a;
+  --ev-zinc-900: #18181b;
+  --ev-zinc-950: #09090b;
 }
 
-.button--primary {
-  --ifm-button-background-color: #0b6f74;
-  --ifm-button-border-color: #0b6f74;
+html {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-.button--secondary {
-  --ifm-button-background-color: #f4a636;
-  --ifm-button-border-color: #f4a636;
-  --ifm-button-color: #1f2526;
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--ev-zinc-200);
+  box-shadow: none;
+}
+
+.navbar__item {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.navbar__brand {
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 [data-theme="dark"] {
-  --ifm-color-primary: #7ad6d4;
-  --ifm-color-primary-dark: #5cccca;
-  --ifm-color-primary-darker: #4cc6c4;
-  --ifm-color-primary-darkest: #34aaa8;
-  --ifm-color-primary-light: #98e0de;
-  --ifm-color-primary-lighter: #a8e6e4;
-  --ifm-color-primary-lightest: #d5f4f3;
-  --ifm-background-color: #111c1f;
-  --docusaurus-highlighted-code-line-bg: rgba(122, 214, 212, 0.18);
+  --ifm-color-primary: #34d399;
+  --ifm-color-primary-dark: #1fcc8c;
+  --ifm-color-primary-darker: #10b981;
+  --ifm-color-primary-darkest: #0a9c6d;
+  --ifm-color-primary-light: #52dbab;
+  --ifm-color-primary-lighter: #6ee7b7;
+  --ifm-color-primary-lightest: #a7f3d0;
+
+  --ifm-background-color: #09090b;
+  --ifm-background-surface-color: #0c0c0f;
+  --ifm-navbar-background-color: #09090bee;
+  --ifm-toc-border-color: var(--ev-zinc-800);
+  --ifm-table-border-color: var(--ev-zinc-800);
+
+  --ifm-menu-color-background-active: rgba(52, 211, 153, 0.1);
+  --ifm-menu-color-background-hover: rgba(52, 211, 153, 0.06);
+
+  --docusaurus-highlighted-code-line-bg: rgba(52, 211, 153, 0.16);
+}
+
+[data-theme="dark"] .navbar {
+  border-bottom: 1px solid var(--ev-zinc-800);
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="dark"] .footer {
+  --ifm-footer-color: var(--ev-zinc-400);
+  --ifm-footer-link-color: var(--ev-zinc-300);
+  --ifm-footer-title-color: var(--ev-zinc-100);
+  border-top: 1px solid var(--ev-zinc-900);
+}
+
+.footer {
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.footer__title {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.footer__link-item {
+  font-size: 0.85rem;
+}
+
+.button--primary {
+  --ifm-button-background-color: var(--ifm-color-primary);
+  --ifm-button-border-color: var(--ifm-color-primary);
+}
+
+.menu__link--active,
+.table-of-contents__link--active {
+  font-weight: 600;
+}
+
+[data-theme="dark"] .DocSearch-Button {
+  background: var(--ev-zinc-900);
+  border: 1px solid var(--ev-zinc-800);
 }

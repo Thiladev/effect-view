@@ -91,67 +91,88 @@ export default function Home(): ReactNode {
       description="Write React function components as typed Effect programs"
     >
       <main className={styles.page}>
-        <div className={styles.gridBackdrop} aria-hidden="true" />
+        <section className={styles.hero}>
+          <div className={styles.gridBackdrop} aria-hidden="true" />
+          <div className={styles.heroGlow} aria-hidden="true" />
 
-        <section className={clsx("container", styles.hero)}>
-          <div className={styles.heroCopy}>
-            <div className={styles.eyebrow}>
-              <span className={styles.pulse} />
-              Effect View for React 19
-            </div>
-            <h1>
-              React <span className={styles.unbreakable}>components,</span>
-              <span className={styles.heroAccent}> powered by Effect.</span>
-            </h1>
-            <p className={styles.lede}>
-              Bring typed services, scoped resources, reactive state, server
-              queries, and schema-driven forms into React without hiding either
-              framework.
-            </p>
-
-            <div className={styles.actions}>
-              <Link className={styles.primaryAction} to="/docs/getting-started">
-                Start building
-                <span aria-hidden="true">→</span>
+          <div className={clsx("container", styles.heroGrid)}>
+            <div className={styles.heroCopy}>
+              <Link className={styles.eyebrow} to="/docs/getting-started">
+                <span aria-hidden="true">{"//"}</span>
+                Effect View for React 19
+                <span aria-hidden="true" className={styles.eyebrowArrow}>
+                  →
+                </span>
               </Link>
-              <Link
-                className={styles.secondaryAction}
-                to="https://github.com/Thiladev/effect-view"
-              >
-                View on GitHub
-              </Link>
-            </div>
 
-            <div className={styles.install}>
-              <span aria-hidden="true">$</span>
-              <code>npm install effect-view effect@beta</code>
-            </div>
-            <Link
-              className={styles.hotReload}
-              to="/docs/getting-started#set-up-hot-reloading-with-vite"
-            >
-              <span aria-hidden="true">↻</span>
-              Hot reload with Vite Fast Refresh
-            </Link>
-          </div>
+              <h1>
+                React components,
+                <br />
+                powered by Effect.
+              </h1>
 
-          <div className={styles.codeStage}>
-            <div className={styles.codeGlow} aria-hidden="true" />
-            <div className={styles.codeWindow}>
-              <div className={styles.windowBar}>
-                <div className={styles.windowDots} aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <span>UserCard.tsx</span>
-                <span className={styles.windowStatus}>Effect + JSX</span>
+              <p className={styles.lede}>
+                Bring typed services, scoped resources, reactive state,
+                server queries, and schema-driven forms into React without
+                hiding either framework.
+              </p>
+
+              <div className={styles.installBox}>
+                <span className={styles.installPrompt} aria-hidden="true">
+                  $
+                </span>
+                <code>npm install effect-view effect@rc</code>
               </div>
-              <CodeBlock language="tsx">{componentExample}</CodeBlock>
-              <div className={styles.codeLegend}>
-                <span><b>01</b> Yield services</span>
-                <span><b>02</b> Own the lifecycle</span>
-                <span><b>03</b> Return JSX</span>
+
+              <div className={styles.actions}>
+                <Link
+                  className={styles.primaryAction}
+                  to="/docs/getting-started"
+                >
+                  Start building
+                  <span aria-hidden="true">→</span>
+                </Link>
+                <Link
+                  className={styles.secondaryAction}
+                  to="https://github.com/Thiladev/effect-view"
+                >
+                  View on GitHub
+                </Link>
+              </div>
+
+              <Link
+                className={styles.hotReload}
+                to="/docs/getting-started#set-up-hot-reloading-with-vite"
+              >
+                <span aria-hidden="true">↻</span>
+                Hot reload with Vite Fast Refresh
+              </Link>
+            </div>
+
+            <div className={styles.codeStage}>
+              <div className={styles.codeGlow} aria-hidden="true" />
+              <div className={styles.codeWindow}>
+                <div className={styles.windowBar}>
+                  <div className={styles.windowDots} aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <span>UserCard.tsx</span>
+                  <span className={styles.windowStatus}>Effect + JSX</span>
+                </div>
+                <CodeBlock language="tsx">{componentExample}</CodeBlock>
+                <div className={styles.codeLegend}>
+                  <span>
+                    <b>01</b> Yield services
+                  </span>
+                  <span>
+                    <b>02</b> Own the lifecycle
+                  </span>
+                  <span>
+                    <b>03</b> Return JSX
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -159,7 +180,7 @@ export default function Home(): ReactNode {
 
         <section className={clsx("container", styles.featuresSection)}>
           <div className={styles.sectionHeading}>
-            <p className={styles.sectionKicker}>Why Effect View</p>
+            <p className={styles.sectionKicker}>{"// Why Effect View"}</p>
             <h2>One model from render to resources.</h2>
             <p>
               Effect View adds the pieces React deliberately leaves open while
@@ -193,12 +214,13 @@ export default function Home(): ReactNode {
 
         <section className={clsx("container", styles.ctaWrap)}>
           <div className={styles.cta}>
-            <div>
-              <p className={styles.sectionKicker}>Ready when React is</p>
+            <div className={styles.ctaGridBackdrop} aria-hidden="true" />
+            <div className={styles.ctaCopy}>
+              <p className={styles.sectionKicker}>{"// Ready when React is"}</p>
               <h2>Start with one Effect component.</h2>
               <p>
-                Add a runtime, cross the React boundary once, and grow into the
-                rest of the toolkit only when you need it.
+                Add a runtime, cross the React boundary once, and grow into
+                the rest of the toolkit only when you need it.
               </p>
             </div>
             <Link className={styles.ctaAction} to="/docs/getting-started">
