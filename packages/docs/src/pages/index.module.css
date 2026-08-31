@@ -280,15 +280,16 @@
 }
 
 .codeWindow :global(.theme-code-block) {
+  border: 0;
   border-radius: 0;
   box-shadow: none;
   margin: 0;
 }
 
-.codeWindow :global(.theme-code-block pre) {
+.codeWindow :global(.theme-code-block pre.thin-scrollbar) {
   background: var(--home-terminal-bg) !important;
-  font-size: 0.8rem;
-  line-height: 1.62;
+  font-size: 0.8rem !important;
+  line-height: 1.62 !important;
   max-height: none;
   padding: 1.4rem 1.6rem !important;
 }

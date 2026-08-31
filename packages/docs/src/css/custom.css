@@ -131,3 +131,78 @@ samp {
   background: var(--ev-zinc-900);
   border: 1px solid var(--ev-zinc-800);
 }
+
+/* ---------- Code blocks ---------- */
+/* One quiet, low-contrast surface - matches effect.website: a subtle step
+   off the page background, not a loud bordered card. */
+
+.theme-code-block {
+  --ifm-pre-padding: 1.25rem;
+  background: var(--ev-zinc-50);
+  border: 1px solid var(--ev-zinc-200);
+  border-radius: 0.5rem;
+  box-shadow: 1.5px 1.5px 3px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] .theme-code-block {
+  background: var(--ev-zinc-900);
+  border-color: var(--ev-zinc-800);
+}
+
+/* The Prism theme sets its own (much louder) background inline - drop it
+   so the whole frame reads as one surface instead of a title/body seam. */
+.theme-code-block pre.thin-scrollbar {
+  background: transparent !important;
+}
+
+/* Title renders only when a `title="..."` fence meta is present */
+.theme-code-block:has(> div + div) > div:first-child {
+  background: transparent;
+  color: var(--ev-zinc-500);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.9rem 1.4rem 0;
+}
+
+.theme-code-block pre.thin-scrollbar {
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+[class*="buttonGroup_"] button {
+  background: transparent;
+  border: none;
+  border-radius: 0.35rem;
+  color: var(--ev-zinc-500);
+}
+
+[class*="buttonGroup_"] button:hover {
+  background: var(--ev-zinc-100);
+  color: var(--ev-zinc-800);
+}
+
+[data-theme="dark"] [class*="buttonGroup_"] button:hover {
+  background: var(--ev-zinc-900);
+  color: var(--ev-zinc-100);
+}
+
+[class*="codeLineNumber_"] {
+  border: none;
+  color: var(--ev-zinc-400);
+  padding-inline: 1.25rem 1rem !important;
+  text-align: right !important;
+}
+
+[data-theme="dark"] [class*="codeLineNumber_"] {
+  color: var(--ev-zinc-600);
+}
+
+[class*="codeLineContent_"] {
+  border-inline-start: 1px solid rgba(113, 113, 122, 0.2);
+  padding-inline-start: 1.25rem;
+}
+
+[class*="codeLineNumber_"]::before {
+  opacity: 1 !important;
+}
