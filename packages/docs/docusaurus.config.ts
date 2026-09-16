@@ -2,6 +2,9 @@ import type * as Preset from "@docusaurus/preset-classic"
 import type { Config } from "@docusaurus/types"
 import { themes as prismThemes } from "prism-react-renderer"
 
+import githubDark from "./src/prism/github-dark"
+import remarkLineNumbers from "./src/remark/line-numbers"
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
@@ -43,6 +46,7 @@ const config: Config = {
           sidebarPath: "./sidebars.ts",
           editUrl:
             "https://github.com/Thiladev/effect-view/tree/main/packages/docs/",
+          remarkPlugins: [remarkLineNumbers],
           lastVersion: "current",
           versions: {
             current: {
@@ -65,6 +69,7 @@ const config: Config = {
   themeConfig: {
     // Replace with your project's social card
     colorMode: {
+      defaultMode: "dark",
       respectPrefersColorScheme: true,
     },
     navbar: {
@@ -139,7 +144,7 @@ const config: Config = {
     },
     prism: {
       theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      darkTheme: githubDark,
     },
   } satisfies Preset.ThemeConfig,
 }
