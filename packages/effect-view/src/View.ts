@@ -1,5 +1,5 @@
-import { Effect, Equivalence, Stream } from "effect"
-import { View } from "effect-lens"
+import { Effect, Equivalence, Stream, SubscriptionRef } from "effect"
+import { Lens, View } from "effect-lens"
 import * as React from "react"
 import * as Component from "./Component.js"
 
@@ -39,4 +39,16 @@ export const useAll = Effect.fnUntraced(function* <const T extends readonly View
     ), elements)
 
     return reactStateValue as any
+})
+
+export const useFromReactiveValues = Effect.fnUntraced(function* <const A extends React.DependencyList>(
+    values: A,
+): Effect.fn.Return<View.View<A, never, never>> {
+    const lens = yield* Component.useOnMount(() => Effect.map(
+        SubscriptionRef.make(values),
+        Lens.fromSubscriptionRef,
+    ))
+
+    yield* Component.useReactEffect(() => Lens.set(lens, values), values)
+    return lens
 })
