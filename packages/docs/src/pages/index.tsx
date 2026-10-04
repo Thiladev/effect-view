@@ -121,7 +121,7 @@ export default function Home(): ReactNode {
                 <span className={styles.installPrompt} aria-hidden="true">
                   $
                 </span>
-                <code>npm install effect-view effect@rc</code>
+                <code>npm install effect-view effect</code>
               </div>
 
               <div className={styles.actions}>

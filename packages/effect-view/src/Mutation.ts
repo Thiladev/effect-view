@@ -1,5 +1,5 @@
 import { Cause, type Context, Effect, Exit, type Fiber, Option, Pipeable, Predicate, PubSub, Ref, type Scope, Semaphore, Stream, SubscriptionRef } from "effect"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import * as Lens from "./Lens.js"
 import * as View from "./View.js"
 

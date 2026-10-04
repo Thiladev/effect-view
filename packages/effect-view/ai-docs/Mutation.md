@@ -28,7 +28,7 @@ const mutation = yield* Component.useOnMount(() =>
 `mutation.state` is a `View` of `{ key: Option<K>, result: AsyncResult<A, E> }`. `result` starts `Initial` (`waiting: false`); calling `mutate`/`mutateView` sets `waiting: true`, then publishes `Success` or `Failure`. Match on `state.result`, not `state` itself:
 
 ```tsx
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 
 const [state] = yield* View.useAll([mutation.state])
 

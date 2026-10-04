@@ -1,6 +1,6 @@
 import { Effect, Schedule, type Scope, Stream } from "effect"
+import { AsyncResult } from "effect/reactivity"
 import { TestClock } from "effect/testing"
-import { AsyncResult } from "effect/unstable/reactivity"
 import { describe, expect, it } from "vitest"
 import * as Query from "./Query.js"
 import * as QueryClient from "./QueryClient.js"

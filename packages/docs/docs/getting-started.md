@@ -24,7 +24,7 @@ For a web application, install Effect View with Effect 4 and React 19.2 or
 newer:
 
 ```bash npm2yarn
-npm install effect-view effect@beta react react-dom
+npm install effect-view effect react react-dom
 ```
 
 ```bash npm2yarn
@@ -69,7 +69,7 @@ layers needed by the UI:
 
 ```tsx title="src/runtime.ts"
 import { Layer } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { ReactRuntime } from "effect-view"
 
 const AppLive = Layer.empty.pipe(

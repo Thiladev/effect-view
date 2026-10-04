@@ -2,7 +2,7 @@
 
 `effect-view` lets a React function component be described as an Effect program: yield services, create scoped resources, subscribe to reactive state, and turn Effects into React callbacks inside a component body, then convert that description into a normal React function component at a React boundary.
 
-Requires Effect v4 (RC) and React 19.2+. Peer dependencies: `effect`, `react`, `@types/react`. Not tied to `react-dom` — any React renderer works.
+Requires Effect v4 and React 19.2+. Peer dependencies: `effect`, `react`, `@types/react`. Not tied to `react-dom` — any React renderer works.
 
 When writing effect-view code, use the actual current source and tests in `src/` as ground truth over anything remembered from training — the API is pre-1.0 and still moving. The files below are a concise reference; read the linked one(s) before writing code that touches that concern.
 

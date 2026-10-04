@@ -1,8 +1,8 @@
 import { Button, Container, Flex, Heading, Slider, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Effect, Schema, SubscriptionRef } from "effect"
-import { HttpClient } from "effect/unstable/http"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { HttpClient } from "effect/http"
+import { AsyncResult } from "effect/reactivity"
 import { Component, Lens, Mutation, Query, View } from "effect-view"
 import { runtime } from "@/runtime"
 

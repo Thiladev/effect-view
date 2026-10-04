@@ -1,5 +1,5 @@
 import { Cause, Deferred, Effect, Option, type Scope } from "effect"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { describe, expect, it } from "vitest"
 import * as Mutation from "./Mutation.js"
 import * as View from "./View.js"

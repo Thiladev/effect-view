@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { Array, Cause, type Context, Effect, Fiber, Option, Pipeable, Predicate, Schema, SchemaIssue, type Scope, Semaphore, SubscriptionRef } from "effect"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import * as Form from "./Form.js"
 import * as Lens from "./Lens.js"
 import * as Mutation from "./Mutation.js"

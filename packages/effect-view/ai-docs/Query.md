@@ -36,7 +36,7 @@ export const runtime = ReactRuntime.make(AppLive)
 
 ```tsx
 import { Effect, Schema, SubscriptionRef } from "effect"
-import { HttpClient } from "effect/unstable/http"
+import { HttpClient } from "effect/http"
 import { Component, Lens, Query, View } from "effect-view"
 
 const [postId, query] = yield* Component.useOnMount(() =>
@@ -70,7 +70,7 @@ const [postId, query] = yield* Component.useOnMount(() =>
 `query.state: View<QueryState<K, A, E>>` where `QueryState = { key: K; result: AsyncResult<A, E> }`.
 
 ```tsx
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 
 const [state] = yield* View.useAll([query.state])
 

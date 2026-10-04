@@ -68,7 +68,7 @@ than reconstructing the query during render.
 
 ```tsx
 import { Effect, Schema, SubscriptionRef } from "effect"
-import { HttpClient } from "effect/unstable/http"
+import { HttpClient } from "effect/http"
 import { Component, Lens, Query, View } from "effect-view"
 
 const Post = Schema.Struct({
@@ -142,7 +142,7 @@ interface QueryState<K, A, E> {
 Subscribe with `View.useAll`, then match the result explicitly:
 
 ```tsx
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 
 const [state] = yield* View.useAll([query.state])
 
@@ -303,7 +303,7 @@ Window-focus refresh depends on the optional `@effect/platform-browser`
 integration. Install it in browser applications that use this behavior:
 
 ```bash npm2yarn
-npm install @effect/platform-browser@beta
+npm install @effect/platform-browser
 ```
 
 When the package is available, focusing the window resolves the current key

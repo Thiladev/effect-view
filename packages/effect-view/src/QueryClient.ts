@@ -1,5 +1,5 @@
 import { type Cause, Context, DateTime, Duration, Effect, Equal, Equivalence, Hash, HashMap, Layer, type Option, Pipeable, Predicate, Schedule, type Scope, Semaphore, SubscriptionRef } from "effect"
-import type { AsyncResult } from "effect/unstable/reactivity"
+import type { AsyncResult } from "effect/reactivity"
 import * as Lens from "./Lens.js"
 import type * as View from "./View.js"
 

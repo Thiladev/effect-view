@@ -1,6 +1,6 @@
 import { Clipboard, Geolocation, Permissions } from "@effect/platform-browser"
 import { DateTime, Layer } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { QueryClient, ReactRuntime } from "effect-view"
 
 

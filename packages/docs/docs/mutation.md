@@ -37,7 +37,7 @@ create it in an Effect service when it should be shared.
 
 ```tsx
 import { Effect } from "effect"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { Component, Mutation, View } from "effect-view"
 import { sendInvite } from "./api"
 
