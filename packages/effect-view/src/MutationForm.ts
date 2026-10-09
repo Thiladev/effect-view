@@ -24,7 +24,7 @@ extends Form.Form<readonly [], A, I, never, never> {
 
     readonly run: Effect.Effect<void>
     readonly submit: Effect.Effect<
-        Option.Option<Mutation.FinalMutationState<
+        Option.Option<Mutation.MutationFinalState<
             readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
             MA, ME
         >>,
@@ -141,7 +141,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
     }
 
     get submit(): Effect.Effect<
-        Option.Option<Mutation.FinalMutationState<
+        Option.Option<Mutation.MutationFinalState<
             readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
             MA, ME
         >>,
@@ -155,7 +155,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
     }
 
     submitValue(value: A): Effect.Effect<
-        Option.Option<Mutation.FinalMutationState<
+        Option.Option<Mutation.MutationFinalState<
             readonly [value: A, form: MutationForm<A, I, RD, RE, unknown, unknown, unknown>],
             MA, ME
         >>,

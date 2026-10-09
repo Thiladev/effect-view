@@ -1,7 +1,8 @@
-import { Cause, type Context, Effect, Exit, type Fiber, Option, Pipeable, Predicate, PubSub, Ref, type Scope, Semaphore, Stream, SubscriptionRef } from "effect"
+import { type Context, Effect, Option, Pipeable, Predicate, type Scope, type Stream, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import * as Lens from "./Lens.js"
-import * as View from "./View.js"
+import * as Operation from "./Operation.js"
+import type * as View from "./View.js"
 
 
 export const MutationTypeId: unique symbol = Symbol.for("@effect-view/Mutation/Mutation")
@@ -15,15 +16,15 @@ extends Pipeable.Pipeable {
     readonly f: (key: K) => Effect.Effect<A, E, R>
 
     readonly latestKey: View.View<Option.Option<K>>
-    readonly fiber: View.View<Option.Option<Fiber.Fiber<A, E>>>
-    readonly state: View.View<LatestMutationState<K, A, E>>
-    readonly latestFinalState: View.View<Option.Option<FinalMutationState<K, A, E>>>
+    readonly operation: View.View<Option.Option<Operation.Operation<Option.Some<K>, A, E, R>>>
+    readonly state: View.View<MutationLatestState<K, A, E>>
+    readonly latestFinalState: View.View<Option.Option<MutationFinalState<K, A, E>>>
 
-    mutate(key: K): Effect.Effect<FinalMutationState<K, A, E>>
-    mutateView(key: K): Effect.Effect<View.View<MutationState<K, A, E>>>
+    mutate(key: K): Effect.Effect<MutationFinalState<K, A, E>>
+    mutateStream(key: K): Effect.Effect<Stream.Stream<MutationState<K, A, E>>>
 }
 
-export interface LatestMutationState<out K, out A, out E = never> {
+export interface MutationLatestState<out K, out A, out E = never> {
     readonly key: Option.Option<K>
     readonly result: AsyncResult.AsyncResult<A, E>
 }
@@ -33,7 +34,7 @@ export interface MutationState<out K, out A, out E = never> {
     readonly result: AsyncResult.AsyncResult<A, E>
 }
 
-export interface FinalMutationState<out K, out A, out E = never> {
+export interface MutationFinalState<out K, out A, out E = never> {
     readonly key: Option.Some<K>
     readonly result: AsyncResult.Success<A, E> | AsyncResult.Failure<A, E>
 }
@@ -50,124 +51,68 @@ extends Pipeable.Class implements Mutation<K, A, E, R> {
         readonly f: (key: K) => Effect.Effect<A, E, R>,
 
         readonly latestKey: Lens.Lens<Option.Option<K>>,
-        readonly fiber: Lens.Lens<Option.Option<Fiber.Fiber<A, E>>>,
-        readonly state: Lens.Lens<LatestMutationState<K, A, E>>,
-        readonly latestFinalState: Lens.Lens<Option.Option<FinalMutationState<K, A, E>>>,
+        readonly operation: Lens.Lens<Option.Option<Operation.Operation<Option.Some<K>, A, E, R>>>,
+        readonly state: Lens.Lens<MutationLatestState<K, A, E>>,
+        readonly latestFinalState: Lens.Lens<Option.Option<MutationFinalState<K, A, E>>>,
+
     ) {
         super()
     }
 
-    mutate(key: K): Effect.Effect<FinalMutationState<K, A, E>> {
-        return Lens.set(this.latestKey, Option.some(key)).pipe(
-            Effect.andThen(this.start(key)),
-            Effect.flatMap(state => this.watch(state)),
+    mutate(key: K): Effect.Effect<MutationFinalState<K, A, E>> {
+        return this.start(key).pipe(
+            Effect.flatMap(operation => operation.await),
             Effect.provide(this.context),
         )
     }
-    mutateView(key: K): Effect.Effect<View.View<MutationState<K, A, E>>> {
-        return Lens.set(this.latestKey, Option.some(key)).pipe(
-            Effect.andThen(this.start(key)),
-            Effect.tap(state => Effect.forkScoped(this.watch(state))),
+    mutateStream(key: K): Effect.Effect<Stream.Stream<MutationState<K, A, E>>> {
+        return this.start(key).pipe(
+            Effect.map(operation => operation.stream),
             Effect.provide(this.context),
         )
     }
 
+    /** Starts a new Operation, which supersedes the current one without interrupting it. */
     start(key: K): Effect.Effect<
-        View.View<MutationState<K, A, E>>,
+        Operation.Operation<Option.Some<K>, A, E, R>,
         never,
         Scope.Scope | R
     > {
         return Effect.gen({ self: this }, function*() {
-            const currentKey = Option.some(key) as Option.Some<K>
+            const latestFinalState = yield* Lens.get(this.latestFinalState)
+            const operation = yield* Operation.make({
+                key: Option.some(key) as Option.Some<K>,
+                effect: this.f(key),
+                previous: Option.isSome(latestFinalState)
+                    ? latestFinalState.value.result
+                    : AsyncResult.initial<A, E>(),
+                listener: this.listener,
+            })
 
-            const previous: MutationState<K, A, E> = Option.getOrElse(yield* Lens.get(this.latestFinalState), () => ({
-                key: currentKey,
-                result: AsyncResult.initial(),
-            }))
-            const state = yield* makeMutationStateLens(previous)
-
-            const fiber = yield* Effect.forkScoped(Effect.andThen(
-                Lens.update<MutationState<K, A, E>, never, never, never, never>(
-                    state,
-                    previous => AsyncResult.match(previous.result, {
-                        onInitial: () => ({
-                            key: currentKey,
-                            result: AsyncResult.initial(true),
-                        }),
-                        onSuccess: result => ({
-                            key: currentKey,
-                            result: AsyncResult.success(result.value, {
-                                waiting: true,
-                            }),
-                        }),
-                        onFailure: result => ({
-                            key: currentKey,
-                            result: AsyncResult.failure(result.cause, {
-                                waiting: true,
-                                previousSuccess: result.previousSuccess,
-                            }),
-                        }),
-                    }
-                )),
-
-                Effect.onExit(this.f(key), exit => Effect.gen({ self: this }, function*() {
-                    const fiberId = yield* Effect.fiberId
-                    const fiber = yield* Lens.get(this.fiber)
-
-                    if (Option.isSome(fiber) && fiberId === fiber.value.id)
-                        yield* Lens.set(this.fiber, Option.none())
-
-                    const finalState = (yield* Lens.updateAndGet<MutationState<K, A, E>, never, never, never, never>(
-                        state,
-                        previous => Exit.match(exit, {
-                            onSuccess: v => ({
-                                key: currentKey,
-                                result: AsyncResult.success(v),
-                            }),
-                            onFailure: c => Cause.hasInterruptsOnly(c)
-                                ? previous
-                                : AsyncResult.match(previous.result, {
-                                    onInitial: () => ({
-                                        key: currentKey,
-                                        result: AsyncResult.failure(c),
-                                    }),
-                                    onSuccess: v => ({
-                                        key: currentKey,
-                                        result: AsyncResult.failure(c, {
-                                            previousSuccess: Option.some(v),
-                                        }),
-                                    }),
-                                    onFailure: v => ({
-                                        key: currentKey,
-                                        result: AsyncResult.failure(c, {
-                                            previousSuccess: v.previousSuccess,
-                                        }),
-                                    }),
-                                }),
-                        }),
-                    )) as FinalMutationState<K, A, E>
-
-                    yield* Lens.set(this.latestFinalState, Option.some(finalState))
-                    yield* PubSub.shutdown(state.pubsub)
-                }))
-            ))
-
-            yield* Lens.set(this.fiber, Option.some(fiber))
-            return state
+            yield* Lens.set(this.latestKey, Option.some(key))
+            yield* Lens.set(this.operation, Option.some(operation))
+            yield* operation.start
+            return operation
         })
     }
 
-    watch(
-        state: View.View<MutationState<K, A, E>>
-    ): Effect.Effect<FinalMutationState<K, A, E>> {
-        return View.get(state).pipe(
-            Effect.andThen(initial => Stream.runFoldEffect(
-                View.changes(state),
-                () => initial,
-                (_, result) => Effect.as(Lens.set(this.state, result), result),
-            ) as Effect.Effect<FinalMutationState<K, A, E>>),
-            Effect.tap(result => Lens.set(this.latestFinalState, Option.some(result))),
+    /** Runs `effect` only if `operation` is the current Operation. */
+    ifCurrent(operation: Operation.Operation<Option.Some<K>, A, E, R>, effect: Effect.Effect<void>): Effect.Effect<void> {
+        return Effect.flatMap(
+            Lens.get(this.operation),
+            current => Option.isSome(current) && current.value === operation
+                ? effect
+                : Effect.void,
         )
+    }
+
+    /** Records the state of the current Operation. Superseded Operations are ignored. */
+    get listener(): Operation.OperationListener<Option.Some<K>, A, E, R> {
+        return {
+            onChange: (operation, state) => this.ifCurrent(operation, Lens.set(this.state, state)),
+            onSettle: (operation, state) => this.ifCurrent(operation, Lens.set(this.latestFinalState, Option.some(state))),
+            onInterrupt: () => Effect.void,
+        }
     }
 }
 
@@ -190,52 +135,11 @@ export const make = Effect.fnUntraced(function* <K = never, A = void, E = never,
         options.f,
 
         Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<K>())),
-        Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<Fiber.Fiber<A, E>>())),
-        Lens.fromSubscriptionRef(yield* SubscriptionRef.make<LatestMutationState<K, A, E>>({
+        Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<Operation.Operation<Option.Some<K>, A, E, R>>())),
+        Lens.fromSubscriptionRef(yield* SubscriptionRef.make<MutationLatestState<K, A, E>>({
             key: Option.none(),
             result: AsyncResult.initial(),
         })),
-        Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<FinalMutationState<K, A, E>>())),
+        Lens.fromSubscriptionRef(yield* SubscriptionRef.make(Option.none<MutationFinalState<K, A, E>>())),
     )
 })
-
-
-export class MutationStateLens<in out K, in out A, in out E = never>
-extends Lens.LensImpl<MutationState<K, A, E>, never, never, never, never> {
-    constructor(
-        readonly ref: Ref.Ref<MutationState<K, A, E>>,
-        readonly pubsub: PubSub.PubSub<MutationState<K, A, E>>,
-        readonly semaphore: Semaphore.Semaphore,
-    ) {
-        super()
-    }
-
-    get resolve(): Effect.Effect<Lens.LensImpl.Resolved<MutationState<K, A, E>>, never, never> {
-        return Effect.map(
-            Ref.get(this.ref),
-            value => ({
-                value,
-                commit: next => Effect.flatMap(
-                    next,
-                    value => Effect.andThen(
-                        Ref.set(this.ref, value),
-                        PubSub.publish(this.pubsub, value),
-                    ),
-                ),
-            }),
-        )
-    }
-    get changes() { return Stream.fromPubSub(this.pubsub) }
-    get lock() { return Effect.succeed(this.semaphore.withPermit) }
-}
-
-export const makeMutationStateLens = <K, A, E = never>(
-    initial: MutationState<K, A, E>,
-) => Effect.all([
-    Ref.make(initial),
-    PubSub.unbounded<MutationState<K, A, E>>({ replay: 1 }),
-    Semaphore.make(1),
-]).pipe(
-    Effect.tap(([, pubsub]) => PubSub.publish(pubsub, initial)),
-    Effect.map(([ref, pubsub, semaphore]) => new MutationStateLens(ref, pubsub, semaphore)),
-)

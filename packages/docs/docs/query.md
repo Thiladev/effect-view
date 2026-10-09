@@ -19,14 +19,15 @@ If you already know TanStack Query, the main concepts translate directly:
 | `queryFn` | `f: (key: K) => Effect<A, E, R>` |
 | `useQuery` result | `query.state`, a `View<QueryState<K, A, E>>` |
 | `isFetching` | `result.waiting` |
-| `refetch` | `query.refresh` or `query.refreshView` |
+| `refetch` | `query.refresh` or `query.refreshStream` |
 | `invalidateQueries` | `query.invalidateCache` or `invalidateCacheEntry` |
 
 The goal is familiar query behavior without leaving Effect's model. Query
 functions keep their typed success, error, and service channels. They can use
 services from the runtime, be composed with schema decoding and retry policies,
 and are interrupted automatically when their scope ends or a new key supersedes
-the current request.
+the current request. A `fetch` or `refresh` that a newer request supersedes is
+interrupted as well, rather than returning a result.
 
 ## Provide a QueryClient
 
@@ -216,7 +217,7 @@ const runSync = yield* Component.useRunSync()
 
 return (
   <div>
-    <button onClick={() => runSync(query.refreshView)}>
+    <button onClick={() => runSync(query.refreshStream)}>
       Refresh current post
     </button>
     <button onClick={() => runSync(query.invalidateCacheEntry(["post", id] as const))}>
@@ -234,18 +235,20 @@ The methods come in two styles:
 | Method | Behavior |
 | --- | --- |
 | `fetch(key)` | Fetch a specific key and wait for its final state. |
-| `fetchView(key)` | Start fetching and immediately return a live state `View`. |
+| `fetchStream(key)` | Start fetching and immediately return a `Stream` of the request's states, ending once it settles. |
 | `refresh` | Resolve the current key again and wait for its final state. |
-| `refreshView` | Resolve the current key again and immediately return a live state `View`. |
+| `refreshStream` | Resolve the current key again and immediately return a `Stream` of the request's states, ending once it settles. |
 | `invalidateCacheEntry(key)` | Remove the cached success for one key. |
 | `invalidateCache` | Remove every cached success associated with this query function. |
 
-The `*View` variants are convenient in synchronous UI callbacks: they return
-after the scoped request has started, while the returned View and `query.state`
-continue to publish progress. The non-View variants are useful in Effect
-workflows that need to wait for the final success or failure state.
+The `*Stream` variants are convenient in synchronous UI callbacks: they return
+after the scoped request has started. The returned stream emits the request's
+current state, then each change, and ends once the request settles or is
+superseded; `query.state` keeps publishing progress either way. The non-Stream
+variants are useful in Effect workflows that need to wait for the final success
+or failure state.
 
-Invalidating does not itself refetch. Follow it with `refreshView`, change the
+Invalidating does not itself refetch. Follow it with `refresh` or `refreshStream`, change the
 key, or allow a later fetch to repopulate the cache.
 
 ### Refresh on an interval

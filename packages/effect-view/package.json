@@ -55,6 +55,10 @@
       "types": "./dist/MutationForm.d.ts",
       "default": "./dist/MutationForm.js"
     },
+    "./Operation": {
+      "types": "./dist/Operation.d.ts",
+      "default": "./dist/Operation.js"
+    },
     "./PubSub": {
       "types": "./dist/PubSub.d.ts",
       "default": "./dist/PubSub.js"

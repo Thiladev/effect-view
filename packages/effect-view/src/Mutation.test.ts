@@ -1,4 +1,4 @@
-import { Cause, Deferred, Effect, Option, type Scope } from "effect"
+import { Cause, Deferred, Effect, Fiber, Option, type Scope, Stream } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { describe, expect, it } from "vitest"
 import * as Mutation from "./Mutation.js"
@@ -7,6 +7,14 @@ import * as View from "./View.js"
 
 const runMutationTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
     Effect.runPromise(Effect.scoped(effect))
+
+const currentFiber = <K, A, E, R>(mutation: Mutation.Mutation<K, A, E, R>) => Effect.flatMap(
+    View.get(mutation.operation),
+    Option.match({
+        onSome: operation => View.get(operation.fiber),
+        onNone: () => Effect.succeedNone,
+    }),
+)
 
 const expectSuccessValue = <A, E>(state: { readonly result: AsyncResult.AsyncResult<A, E> }): A => {
     expect(AsyncResult.isSuccess(state.result)).toBe(true)
@@ -32,7 +40,7 @@ describe("Mutation", () => {
                 latestKey: yield* View.get(mutation.latestKey),
                 state: yield* View.get(mutation.state),
                 latestFinalState: yield* View.get(mutation.latestFinalState),
-                fiber: yield* View.get(mutation.fiber),
+                fiber: yield* currentFiber(mutation),
             }
         }))
 
@@ -100,32 +108,73 @@ describe("Mutation", () => {
         expect(expectSuccessValue(result.second)).toBe("b")
     })
 
-    it("mutateView returns a waiting state without waiting for completion", async () => {
+    it("mutateStream returns without waiting for completion, and streams the states until settled", async () => {
         const result = await runMutationTest(Effect.gen(function*() {
             const deferred = yield* Deferred.make<string>()
             const mutation = yield* Mutation.make({
                 f: (_key: string) => Deferred.await(deferred),
             })
 
-            const state = yield* mutation.mutateView("save")
+            const stream = yield* mutation.mutateStream("save")
+            const states = yield* Effect.forkScoped(Stream.runCollect(stream))
             yield* Effect.yieldNow
-
-            const pending = yield* View.get(state)
-            const hasRunningFiber = Option.isSome(yield* View.get(mutation.fiber))
+            const hasRunningFiber = Option.isSome(yield* currentFiber(mutation))
 
             yield* Deferred.succeed(deferred, "saved")
-            yield* Effect.yieldNow
 
-            const final = yield* View.get(mutation.latestFinalState).pipe(Effect.flatMap(Effect.fromOption))
-
-            return { pending, hasRunningFiber, final }
+            return {
+                states: yield* Fiber.join(states).pipe(Effect.timeout("1 second")),
+                hasRunningFiber,
+            }
         }))
 
-        expect(result.pending.key.value).toBe("save")
-        expect(AsyncResult.isInitial(result.pending.result)).toBe(true)
-        expect(result.pending.result.waiting).toBe(true)
         expect(result.hasRunningFiber).toBe(true)
-        expect(result.final.key.value).toBe("save")
-        expect(expectSuccessValue(result.final)).toBe("saved")
+        expect(result.states).toHaveLength(2)
+
+        const [pending, final] = result.states
+        expect(pending.key.value).toBe("save")
+        expect(AsyncResult.isInitial(pending.result)).toBe(true)
+        expect(pending.result.waiting).toBe(true)
+        expect(final.key.value).toBe("save")
+        expect(expectSuccessValue(final)).toBe("saved")
+    })
+
+    it("exposes the most recently started operation", async () => {
+        const result = await runMutationTest(Effect.gen(function*() {
+            const mutation = yield* Mutation.make({
+                f: (key: string) => Effect.succeed(key),
+            })
+
+            yield* mutation.mutate("a")
+            yield* mutation.mutate("b")
+            return Option.map(yield* View.get(mutation.operation), operation => operation.key)
+        }))
+
+        expect(result).toEqual(Option.some(Option.some("b")))
+    })
+
+    it("an older mutation finishing late does not overwrite the newer state", async () => {
+        const result = await runMutationTest(Effect.gen(function*() {
+            const slow = yield* Deferred.make<string>()
+            const mutation = yield* Mutation.make({
+                f: (key: string) => key === "a" ? Deferred.await(slow) : Effect.succeed(key),
+            })
+
+            yield* Effect.asVoid(mutation.mutateStream("a"))
+            yield* Effect.yieldNow
+            yield* mutation.mutate("b")
+
+            yield* Deferred.succeed(slow, "a")
+            yield* Effect.sleep("10 millis")
+
+            return {
+                state: yield* View.get(mutation.state),
+                latestFinalState: yield* View.get(mutation.latestFinalState),
+            }
+        }))
+
+        expect(result.state.key).toEqual(Option.some("b"))
+        expect(expectSuccessValue(result.state)).toBe("b")
+        expect(Option.map(result.latestFinalState, s => s.key.value)).toEqual(Option.some("b"))
     })
 })

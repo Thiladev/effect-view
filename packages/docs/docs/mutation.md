@@ -18,10 +18,10 @@ The familiar concepts are present, but the operation itself is an Effect:
 | Mutation result | `mutation.state`, a `View<AsyncResult<A, E>>` |
 | `isPending` | `result.waiting` |
 | `mutateAsync` | `mutation.mutate(key)` |
-| Start without awaiting | `mutation.mutateView(key)` |
+| Start without awaiting | `mutation.mutateStream(key)` |
 
 Unlike a Query, a Mutation has no cache, reactive key, or automatic execution.
-It runs only when `mutate` or `mutateView` is called. This makes it suitable for
+It runs only when `mutate` or `mutateStream` is called. This makes it suitable for
 commands, while Query remains the model for cached server state.
 
 ## Create a mutation
@@ -62,7 +62,7 @@ const InviteButtonView = Component.make("InviteButton")(
         <button
           disabled={result.waiting}
           onClick={() =>
-            runSync(mutation.mutateView({
+            runSync(mutation.mutateStream({
               email: props.email,
               role: "member",
             }))
@@ -132,7 +132,7 @@ during retries or repeated submissions.
 A failure contains an Effect `Cause<E>`, not only `E`. Typed failures, defects,
 and interruption information remain available for logging or presentation.
 
-## Choose mutate or mutateView
+## Choose mutate or mutateStream
 
 Both methods start the same mutation effect. They differ in what the caller
 waits for:
@@ -140,7 +140,7 @@ waits for:
 | Method | Return value | Best suited to |
 | --- | --- | --- |
 | `mutate(key)` | The final `Success` or `Failure` | Effect workflows that need the outcome. |
-| `mutateView(key)` | A live `View<AsyncResult<A, E>>` | UI callbacks that should return after starting the work. |
+| `mutateStream(key)` | A `Stream` of this call's successive states, ending once it settles | UI callbacks that should return after starting the work. |
 
 Use `mutate` with an asynchronous component runner when later logic depends on
 the final result:
@@ -164,20 +164,22 @@ The mutation Effect does not fail with `E`. It captures the operation's `Exit`
 and returns a final `AsyncResult.Success` or `AsyncResult.Failure`. Inspect or
 match that value when control flow depends on the outcome.
 
-Use `mutateView` when the UI only needs to start the operation and react to its
+Use `mutateStream` when the UI only needs to start the operation and react to its
 state:
 
 ```tsx
 const runSync = yield* Component.useRunSync()
 
 const startSave = () => {
-  const state = runSync(mutation.mutateView(input))
-  // `state` is a View for this specific call.
+  const states = runSync(mutation.mutateStream(input))
+  // `states` streams this specific call's states, and ends once it settles.
 }
 ```
 
-`mutateView` starts the scoped work and returns immediately with a per-call
-View. The shared `mutation.state` is also updated as that call progresses.
+`mutateStream` starts the scoped work and returns immediately with a per-call
+`Stream`: it emits the call's current state, then each change, and ends once
+the call settles or is interrupted. The shared `mutation.state` is also updated
+as that call progresses. Consume the stream in a component with `Stream.use`.
 
 ## Track the latest call
 
@@ -188,7 +190,7 @@ In addition to `state`, a mutation exposes reactive metadata:
 | `state` | The latest mutation state published to the shared View. |
 | `latestKey` | The most recently supplied input as an `Option<K>`. |
 | `latestFinalResult` | The latest completed success or failure as an `Option`. |
-| `fiber` | The most recently started mutation fiber as an `Option`. |
+| `operation` | The most recently started call as an `Option<Operation>`: its key, state, fiber, and `interrupt`. |
 
 Subscribe to any of them with `View.useAll`:
 
@@ -207,19 +209,20 @@ any other value accepted by the mutation function.
 ## Concurrent mutations
 
 Starting a mutation does not automatically interrupt an earlier mutation.
-Calls may overlap, and each call has its own state View. This is useful for
+Calls may overlap, and each call has its own state stream. This is useful for
 independent operations such as uploading several files.
 
-When calls overlap, `mutation.state` reflects updates published by all calls;
-the last update to arrive wins. Use the View returned by `mutateView` when each
-concurrent operation needs its own progress indicator:
+When calls overlap, `mutation.state` follows only the most recently started
+call: earlier calls still run to completion, but no longer update it. Use the
+stream returned by `mutateStream` when each concurrent operation needs its own
+progress indicator:
 
 ```tsx
 const upload = (file: File) =>
   Effect.gen(function* () {
-    const uploadState = yield* mutation.mutateView(file)
-    // Store or pass `uploadState` to the row rendering this file.
-    return uploadState
+    const uploadStates = yield* mutation.mutateStream(file)
+    // Pass `uploadStates` to the row rendering this file, e.g. via `Stream.use`.
+    return uploadStates
   })
 ```
 
@@ -240,7 +243,7 @@ const saveAndRefresh = (input: UpdatePostInput) =>
 
     if (AsyncResult.isSuccess(result)) {
       yield* posts.invalidateCacheEntry(["post", result.value.id] as const)
-      yield* posts.refreshView
+      yield* posts.refresh
     }
 
     return result
@@ -253,7 +256,7 @@ also include tracing, transactions, retries, notifications, or parallel cache
 updates without introducing a separate callback API.
 
 Remember that Query invalidation removes cached data but does not refetch by
-itself. Follow it with `refreshView` when the current screen should update
+itself. Follow it with `refresh` or `refreshStream` when the current screen should update
 immediately.
 
 ## The Effect touch
@@ -266,8 +269,8 @@ execution model:
 - Failures are represented as `Cause<E>`, including defects and interruption.
 - Fibers are scoped, so component unmounting cleans up in-flight operations.
 - `mutate` composes directly inside larger Effect workflows.
-- `mutateView` exposes call-specific progress as a View for React or Effect
-  consumers.
+- `mutateStream` exposes call-specific progress as a `Stream` for React or
+  Effect consumers.
 - Retry schedules, timeouts, tracing, logging, metrics, schema validation, and
   concurrency controls can be applied with normal Effect operators.
 

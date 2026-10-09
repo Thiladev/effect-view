@@ -9,7 +9,7 @@ effect-view's counterpart to TanStack Query mutations: user-triggered asynchrono
 | mutation result | `mutation.state`, a `View<{ key: Option<K>; result: AsyncResult<A, E> }>` |
 | `isPending` | `state.result.waiting` |
 | `mutateAsync` | `mutation.mutate(key)` |
-| start without awaiting | `mutation.mutateView(key)` |
+| start without awaiting | `mutation.mutateStream(key)` |
 
 ## Create
 
@@ -25,7 +25,7 @@ const mutation = yield* Component.useOnMount(() =>
 
 ## AsyncResult state
 
-`mutation.state` is a `View` of `{ key: Option<K>, result: AsyncResult<A, E> }`. `result` starts `Initial` (`waiting: false`); calling `mutate`/`mutateView` sets `waiting: true`, then publishes `Success` or `Failure`. Match on `state.result`, not `state` itself:
+`mutation.state` is a `View` of `{ key: Option<K>, result: AsyncResult<A, E> }`. `result` starts `Initial` (`waiting: false`); calling `mutate`/`mutateStream` sets `waiting: true`, then publishes `Success` or `Failure`. Match on `state.result`, not `state` itself:
 
 ```tsx
 import { AsyncResult } from "effect/reactivity"
@@ -41,12 +41,12 @@ AsyncResult.match(state.result, {
 
 `waiting` is independent of the result tag: after one success, starting another call keeps the value visible while `waiting: true`; if that call fails, the failure can retain `previousSuccess`. Failures carry a full `Cause<E>`.
 
-## mutate vs mutateView
+## mutate vs mutateStream
 
 | Method | Returns | Use for |
 |---|---|---|
-| `mutate(key)` | the final `FinalMutationState` (`{ key: Option.Some<K>, result: Success \| Failure }`) | an Effect workflow that needs the outcome |
-| `mutateView(key)` | a live per-call `View<{ key: Option.Some<K>, result: AsyncResult<A, E> }>` | a UI callback that just starts the work |
+| `mutate(key)` | the final `MutationFinalState` (`{ key: Option.Some<K>, result: Success \| Failure }`) | an Effect workflow that needs the outcome |
+| `mutateStream(key)` | a per-call `Stream<{ key: Option.Some<K>, result: AsyncResult<A, E> }>` of the call's states, starting with the current one and ending once it settles | a UI callback that just starts the work |
 
 ```tsx
 const runPromise = yield* Component.useRunPromise()
@@ -58,7 +58,7 @@ void runPromise(Effect.gen(function* () {
 
 ```tsx
 const runSync = yield* Component.useRunSync()
-const state = runSync(mutation.mutateView(input)) // a View for this specific call
+const states = runSync(mutation.mutateStream(input)) // a Stream for this specific call; consume with `Stream.use`
 ```
 
 The mutation Effect never fails with `E` itself — it captures the operation's `Exit` and always resolves to a final state wrapping an `AsyncResult.Success`/`Failure`.
@@ -69,12 +69,12 @@ The mutation Effect never fails with `E` itself — it captures the operation's 
 |---|---|
 | `state` | latest mutation state, shared `View` |
 | `latestKey` | most recent input, `Option<K>` |
-| `latestFinalState` | latest completed final state, `Option<FinalMutationState<K, A, E>>` |
-| `fiber` | most recently started mutation fiber, `Option` |
+| `latestFinalState` | latest completed final state, `Option<MutationFinalState<K, A, E>>` |
+| `operation` | most recently started call, `Option<Operation>` (key, state, `fiber`, `interrupt`) |
 
 ## Concurrency
 
-Starting a mutation does not interrupt an earlier one — calls can overlap, each with its own `mutateView` state; `mutation.state` reflects whichever update arrived last. For a single submit button, disabling while `result.waiting` is usually enough. Use per-call `mutateView` Views (e.g. per uploaded file) when concurrent operations each need their own progress indicator.
+Starting a mutation does not interrupt an earlier one — calls can overlap, each with its own `mutateStream` stream; `mutation.state` (and `latestFinalState`) follow only the most recently started call; earlier calls still run to completion but no longer update them. For a single submit button, disabling while `result.waiting` is usually enough. Use per-call `mutateStream` streams (e.g. per uploaded file) when concurrent operations each need their own progress indicator.
 
 ## Updating queries after a mutation
 
@@ -84,6 +84,6 @@ Mutations never auto-invalidate `Query` caches — compose it explicitly:
 const final = yield* updatePost.mutate(input)
 if (AsyncResult.isSuccess(final.result)) {
   yield* posts.invalidateCacheEntry(["post", final.result.value.id] as const)
-  yield* posts.refreshView // invalidation alone does not refetch
+  yield* posts.refresh // invalidation alone does not refetch
 }
 ```

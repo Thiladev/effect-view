@@ -9,7 +9,7 @@ effect-view's take on TanStack Query: reactive query keys, cached results, stale
 | `queryFn` | `f: (key: K) => Effect<A, E, R>` |
 | `useQuery` result | `query.state`, a `View<QueryState<K, A, E>>` |
 | `isFetching` | `result.waiting` |
-| `refetch` | `query.refresh` / `query.refreshView` |
+| `refetch` | `query.refresh` / `query.refreshStream` |
 | `invalidateQueries` | `query.invalidateCache` / `invalidateCacheEntry` |
 
 ## QueryClient: the shared cache
@@ -88,13 +88,13 @@ AsyncResult.match(state.result, {
 | Method | Behavior |
 |---|---|
 | `fetch(key)` | fetch a specific key, wait for its final state |
-| `fetchView(key)` | start fetching a key, return immediately as a live state `View` |
+| `fetchStream(key)` | start fetching a key, return immediately with a `Stream` of that request's states (ends once it settles or is superseded) |
 | `refresh` | resolve the current key again, wait for its final state |
-| `refreshView` | resolve the current key again, return immediately as a live `View` |
+| `refreshStream` | resolve the current key again, return immediately with a `Stream` of that request's states (ends once it settles or is superseded) |
 | `invalidateCacheEntry(key)` | remove the cached success for one key |
 | `invalidateCache` | remove every cached success for this query |
 
-The `*View` variants suit synchronous UI callbacks (`runSync(query.refreshView)`); the non-`View` variants suit Effect workflows waiting on the outcome. **Invalidating does not refetch by itself** — follow with `refreshView`, a key change, or a later natural fetch.
+The `*Stream` variants suit synchronous UI callbacks (`runSync(query.refreshStream)`); the non-`Stream` variants suit Effect workflows waiting on the outcome. Each stream emits its request's current state first, so subscribing late still yields the final state. **Invalidating does not refetch by itself** — follow with `refresh`/`refreshStream`, a key change, or a later natural fetch.
 
 ```ts
 import { Schedule } from "effect"
@@ -115,4 +115,4 @@ const query = yield* Query.make(options).pipe(
 
 ## The Effect touch
 
-Request fibers belong to the creation scope and are interrupted on unmount, key replacement, or scope closure. Results are `View`s usable outside React too. Mutations do not auto-invalidate queries — compose it explicitly (see `Mutation.md`).
+Request fibers belong to the creation scope and are interrupted on unmount, key replacement, or scope closure. A `fetch`/`refresh` superseded by a newer request is interrupted (it does not return a result), and the interrupted request's state stops waiting. Results are `View`s usable outside React too. Mutations do not auto-invalidate queries — compose it explicitly (see `Mutation.md`).
