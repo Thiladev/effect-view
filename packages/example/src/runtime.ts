@@ -5,7 +5,7 @@ import { QueryClient, ReactRuntime } from "effect-view"
 
 
 export const layer = Layer.empty.pipe(
-    Layer.provideMerge(QueryClient.layer()),
+    Layer.provideMerge(QueryClient.layer),
     Layer.provideMerge(DateTime.layerCurrentZoneLocal),
     Layer.provideMerge(Clipboard.layer),
     Layer.provideMerge(Geolocation.layer),

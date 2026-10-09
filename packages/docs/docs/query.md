@@ -39,7 +39,7 @@ import { Layer } from "effect"
 import { QueryClient, ReactRuntime } from "effect-view"
 
 const AppLive = Layer.empty.pipe(
-  Layer.provideMerge(QueryClient.layer({
+  Layer.provideMerge(QueryClient.layerWithOptions({
     defaultStaleTime: "30 seconds",
     defaultRefreshOnWindowFocus: true,
     cacheGcTime: "5 minutes",

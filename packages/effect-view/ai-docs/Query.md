@@ -21,7 +21,7 @@ import { Layer } from "effect"
 import { QueryClient, ReactRuntime } from "effect-view"
 
 const AppLive = Layer.empty.pipe(
-  Layer.provideMerge(QueryClient.layer({
+  Layer.provideMerge(QueryClient.layerWithOptions({
     defaultStaleTime: "30 seconds",     // default: "0 minutes"
     defaultRefreshOnWindowFocus: true,  // default: true
     cacheGcTime: "5 minutes",           // default: "5 minutes"
@@ -30,7 +30,7 @@ const AppLive = Layer.empty.pipe(
 export const runtime = ReactRuntime.make(AppLive)
 ```
 
-`QueryClient.layer(options?)` builds the service and forks its background garbage-collection loop into the layer's scope. Individual queries may override `staleTime`/`refreshOnWindowFocus`; unset options fall back to these client defaults. `cacheGcTime` controls how long a stale, unaccessed cache entry is kept before eviction. You interact with the client only indirectly through `Query` instances — no need to call `QueryClientService` methods directly.
+`QueryClient.layer` (defaults) / `QueryClient.layerWithOptions(options)` build the service and fork its background garbage-collection loop into the layer's scope. Individual queries may override `staleTime`/`refreshOnWindowFocus`; unset options fall back to these client defaults. `cacheGcTime` controls how long a stale, unaccessed cache entry is kept before eviction. You interact with the client only indirectly through `Query` instances — no need to call `QueryClientService` methods directly.
 
 ## Create and run a query
 

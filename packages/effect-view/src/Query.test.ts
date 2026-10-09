@@ -9,7 +9,7 @@ import * as View from "./View.js"
 
 const runQueryTest = <A, E>(effect: Effect.Effect<A, E, QueryClient.QueryClient | Scope.Scope>) =>
     Effect.runPromise(Effect.scoped(effect.pipe(
-        Effect.provide(QueryClient.layer()),
+        Effect.provide(QueryClient.layer),
     )))
 
 const staticKey = <K>(key: K): View.View<K> => View.make({

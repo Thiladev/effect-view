@@ -122,7 +122,8 @@ export const thenRun = <E = never, R = never>(
     client => Effect.forkScoped(client.run),
 )
 
-export const layer = (options?: make.Options) => Layer.effect(QueryClient, thenRun(make(options)))
+export const layer = Layer.effect(QueryClient, thenRun(make()))
+export const layerWithOptions = (options: make.Options) => Layer.effect(QueryClient, thenRun(make(options)))
 
 
 export const QueryClientCacheKeyTypeId: unique symbol = Symbol.for("@effect-view/QueryClient/QueryClientCacheKey")
