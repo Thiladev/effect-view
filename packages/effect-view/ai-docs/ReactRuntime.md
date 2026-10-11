@@ -8,9 +8,9 @@ Owns a managed Effect runtime and exposes it to a React subtree through context.
 import { Layer } from "effect"
 import { ReactRuntime } from "effect-view"
 
-const AppLive = Layer.empty // add application layers here
+const layer = Layer.empty // add application layers here
 
-export const runtime = ReactRuntime.make(AppLive)
+export const runtime = ReactRuntime.make(layer)
 ```
 
 ```tsx

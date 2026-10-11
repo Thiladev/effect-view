@@ -72,11 +72,11 @@ import { Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ReactRuntime } from "effect-view"
 
-const AppLive = Layer.empty.pipe(
+const layer = Layer.empty.pipe(
   Layer.provideMerge(FetchHttpClient.layer),
 )
 
-export const runtime = ReactRuntime.make(AppLive)
+export const runtime = ReactRuntime.make(layer)
 ```
 
 Keep the runtime stable. Creating it during a React render would create new

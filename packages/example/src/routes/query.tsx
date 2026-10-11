@@ -79,7 +79,7 @@ const QueryRouteComponent = Component.make("QueryRouteView")(function*() {
                 <PostResultView result={queryState.result} />
 
                 <Flex direction="row" justify="center" align="center" gap="1">
-                    <Button onClick={() => runSync(query.refreshView)}>
+                    <Button onClick={() => runSync(query.refreshStream)}>
                         Refresh
                     </Button>
                     <Button onClick={() => runSync(query.invalidateCache)}>
@@ -89,7 +89,7 @@ const QueryRouteComponent = Component.make("QueryRouteView")(function*() {
 
                 <PostResultView result={mutationState.result} />
 
-                <Button onClick={() => runSync(mutation.mutateView([id]))}>
+                <Button onClick={() => runSync(mutation.mutateStream([id]))}>
                     Mutate
                 </Button>
             </Flex>

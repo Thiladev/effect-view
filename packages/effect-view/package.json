@@ -1,11 +1,12 @@
 {
   "name": "effect-view",
   "description": "Write React function components with Effect",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "files": [
     "./README.md",
     "./AGENTS.md",
+    "./CHANGELOG.md",
     "./src/**/*.ts",
     "!./src/**/*.test.ts",
     "./dist/**/*.js",
@@ -22,6 +23,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./AppConnectivity": {
+      "types": "./dist/AppConnectivity.d.ts",
+      "default": "./dist/AppConnectivity.js"
+    },
+    "./AppFocus": {
+      "types": "./dist/AppFocus.d.ts",
+      "default": "./dist/AppFocus.js"
     },
     "./Async": {
       "types": "./dist/Async.d.ts",
@@ -54,6 +63,10 @@
     "./MutationForm": {
       "types": "./dist/MutationForm.d.ts",
       "default": "./dist/MutationForm.js"
+    },
+    "./Operation": {
+      "types": "./dist/Operation.d.ts",
+      "default": "./dist/Operation.js"
     },
     "./PubSub": {
       "types": "./dist/PubSub.d.ts",
@@ -103,7 +116,6 @@
     "clean:modules": "rm -rf node_modules"
   },
   "devDependencies": {
-    "@effect/platform-browser": "^4.0.0",
     "@testing-library/react": "^16.3.0",
     "effect": "^4.0.0",
     "jsdom": "^26.1.0",

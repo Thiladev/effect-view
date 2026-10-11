@@ -1,6 +1,10 @@
 import { type Cause, Context, DateTime, Duration, Effect, Equal, Equivalence, Hash, HashMap, Layer, type Option, Pipeable, Predicate, Schedule, type Scope, Semaphore, SubscriptionRef } from "effect"
 import type { AsyncResult } from "effect/reactivity"
+import * as AppConnectivity from "./AppConnectivity.js"
+import * as AppFocus from "./AppFocus.js"
 import * as Lens from "./Lens.js"
+import type * as Operation from "./Operation.js"
+import type * as Query from "./Query.js"
 import type * as View from "./View.js"
 
 
@@ -10,12 +14,18 @@ export type QueryClientServiceTypeId = typeof QueryClientServiceTypeId
 export interface QueryClientService extends Pipeable.Pipeable {
     readonly [QueryClientServiceTypeId]: QueryClientServiceTypeId
 
+    readonly context: Context.Context<QueryClientService.Context>
     readonly cache: View.View<HashMap.HashMap<QueryClientCacheKey, QueryClientCacheEntry>>
     readonly cacheGcTime: Duration.Duration
+
     readonly defaultStaleTime: Duration.Duration
-    readonly defaultRefreshOnWindowFocus: boolean
+    readonly defaultNetworkMode: Operation.NetworkMode
+    readonly defaultRefreshOnFocus: Query.RefreshOn
+    readonly defaultRefreshOnReconnect: Query.RefreshOn
+    readonly defaultMutationNetworkMode: Operation.NetworkMode
 
     readonly run: Effect.Effect<void, Cause.NoSuchElementError>
+
     getCacheEntry(key: QueryClientCacheKey): Effect.Effect<Option.Option<QueryClientCacheEntry>>
     setCacheEntry(
         key: QueryClientCacheKey,
@@ -26,9 +36,9 @@ export interface QueryClientService extends Pipeable.Pipeable {
     invalidateCacheEntry(key: QueryClientCacheKey): Effect.Effect<void>
 }
 
-export class QueryClient extends Context.Service<QueryClient, QueryClientService>()(
-    "@effect-view/QueryClient/QueryClient"
-) {}
+export namespace QueryClientService {
+    export type Context = AppConnectivity.AppConnectivity | AppFocus.AppFocus
+}
 
 export class QueryClientServiceImpl
 extends Pipeable.Class
@@ -36,10 +46,16 @@ implements QueryClientService {
     readonly [QueryClientServiceTypeId]: QueryClientServiceTypeId = QueryClientServiceTypeId
 
     constructor(
+        readonly context: Context.Context<QueryClientService.Context>,
         readonly cache: Lens.Lens<HashMap.HashMap<QueryClientCacheKey, QueryClientCacheEntry>>,
         readonly cacheGcTime: Duration.Duration,
+
         readonly defaultStaleTime: Duration.Duration,
-        readonly defaultRefreshOnWindowFocus: boolean,
+        readonly defaultNetworkMode: Operation.NetworkMode,
+        readonly defaultRefreshOnFocus: Query.RefreshOn,
+        readonly defaultRefreshOnReconnect: Query.RefreshOn,
+        readonly defaultMutationNetworkMode: Operation.NetworkMode,
+
         readonly runSemaphore: Semaphore.Semaphore,
     ) {
         super()
@@ -99,18 +115,36 @@ export declare namespace make {
     export interface Options {
         readonly cacheGcTime?: Duration.Input
         readonly defaultStaleTime?: Duration.Input
-        readonly defaultRefreshOnWindowFocus?: boolean
+        /** The default network mode of queries. */
+        readonly defaultNetworkMode?: Operation.NetworkMode
+        readonly defaultRefreshOnFocus?: Query.RefreshOn
+        readonly defaultRefreshOnReconnect?: Query.RefreshOn
+        /** The default network mode of mutations. */
+        readonly defaultMutationNetworkMode?: Operation.NetworkMode
     }
 }
 
 export const make = Effect.fnUntraced(function* (
     options: make.Options = {}
-): Effect.fn.Return<QueryClientService, Cause.NoSuchElementError, never> {
+): Effect.fn.Return<
+    QueryClientService,
+    Cause.NoSuchElementError,
+    QueryClientService.Context
+> {
     return new QueryClientServiceImpl(
+        Context.empty().pipe(
+            Context.add(AppConnectivity.AppConnectivity, yield* AppConnectivity.AppConnectivity),
+            Context.add(AppFocus.AppFocus, yield* AppFocus.AppFocus),
+        ),
         Lens.fromSubscriptionRef(yield* SubscriptionRef.make(HashMap.empty<QueryClientCacheKey, QueryClientCacheEntry>())),
         yield* Effect.fromOption(Duration.fromInput(options.cacheGcTime ?? "5 minutes")),
         yield* Effect.fromOption(Duration.fromInput(options.defaultStaleTime ?? "0 minutes")),
-        options.defaultRefreshOnWindowFocus ?? true,
+
+        options.defaultNetworkMode ?? "online",
+        options.defaultRefreshOnFocus ?? true,
+        options.defaultRefreshOnReconnect ?? true,
+        options.defaultMutationNetworkMode ?? "online",
+
         yield* Semaphore.make(1),
     )
 })
@@ -122,7 +156,40 @@ export const thenRun = <E = never, R = never>(
     client => Effect.forkScoped(client.run),
 )
 
-export const layer = (options?: make.Options) => Layer.effect(QueryClient, thenRun(make(options)))
+
+export class QueryClient extends Context.Service<QueryClient, QueryClientService>()(
+    "@effect-view/QueryClient/QueryClient"
+) {}
+
+export const layer: Layer.Layer<
+    QueryClient,
+    Cause.NoSuchElementError,
+    QueryClientService.Context
+> = Layer.effect(QueryClient, thenRun(make()))
+
+export const layerWithOptions = (options: make.Options): Layer.Layer<
+    QueryClient,
+    Cause.NoSuchElementError,
+    QueryClientService.Context
+> => Layer.effect(QueryClient, thenRun(make(options)))
+
+export const layerBrowser: Layer.Layer<
+    QueryClient,
+    Cause.NoSuchElementError,
+    never
+> = layer.pipe(
+    Layer.provide(AppConnectivity.layerBrowser),
+    Layer.provide(AppFocus.layerBrowser),
+)
+
+export const layerBrowserWithOptions = (options: make.Options): Layer.Layer<
+    QueryClient,
+    Cause.NoSuchElementError,
+    never
+> => layerWithOptions(options).pipe(
+    Layer.provide(AppConnectivity.layerBrowser),
+    Layer.provide(AppFocus.layerBrowser),
+)
 
 
 export const QueryClientCacheKeyTypeId: unique symbol = Symbol.for("@effect-view/QueryClient/QueryClientCacheKey")

@@ -82,13 +82,12 @@
     },
     "packages/effect-view": {
       "name": "effect-view",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@standard-schema/spec": "^1.1.0",
         "effect-lens": "2.0.3",
       },
       "devDependencies": {
-        "@effect/platform-browser": "^4.0.0",
         "@testing-library/react": "^16.3.0",
         "effect": "^4.0.0",
         "jsdom": "^26.1.0",
@@ -3129,8 +3128,6 @@
     "dom-serializer/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
 
     "dot-prop/is-obj": ["is-obj@2.0.0", "", {}, "sha512-drqDG3cbczxxEJRoOXcOjtdp1J/lyp1mNn0xaznRs8+muBhgQcrnbspox5X5fOw0HnMnbfDzvnEMEtqDEJEo8w=="],
-
-    "effect-view/@effect/platform-browser": ["@effect/platform-browser@4.0.0", "", { "peerDependencies": { "effect": "^4.0.0" } }, "sha512-OHo7EPpF3RVPiI+mjoU9yd05LdCdKPjzDXqs5wRgF9CsdVvwN76B0zgt54DxPUcvMYri1tVJOtLCVnK0tRkNQQ=="],
 
     "effect-view/effect": ["effect@4.0.0", "", {}, "sha512-ooc1TG5t+FfzgYnFz2ff6BBKyZ7EwBRVXC7c4RhQUAD6/TZ2gTXXMeb4WX7a19ozQo4J73/QW+S00YAIresoMQ=="],
 
