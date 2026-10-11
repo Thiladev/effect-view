@@ -125,7 +125,7 @@
     },
     "packages/vite-plugin": {
       "name": "@effect-view/vite-plugin",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "typescript": "^6.0.3",
       },
@@ -135,7 +135,7 @@
         "vitest": "^3.2.4",
       },
       "peerDependencies": {
-        "effect-view": "^0.2.0",
+        "effect-view": "^0.3.0",
         "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
       },
     },
