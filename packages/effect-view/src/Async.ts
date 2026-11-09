@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { type Context, Effect, type Equivalence, Function, Predicate, Scope } from "effect"
+import { Context, Effect, type Equivalence, Function, Predicate, Scope } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 
@@ -39,17 +39,21 @@ export const AsyncPrototype: AsyncPrototype = Object.freeze({
 
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R, F extends Component.Component.Signature>(
         this: Component.Component<P, A, E, R, F> & Async,
-        contextRef: React.RefObject<Context.Context<Exclude<R, Scope.Scope>>>,
+        contextRef: React.RefObject<Context.Context<R>>,
     ) {
         const Inner = (props: { readonly promise: Promise<React.ReactNode> }) => React.use(props.promise)
 
         return ({ fallback, name, ...props }: AsyncProps) => {
-            const promise = Effect.runPromiseWith(contextRef.current)(
-                Effect.flatMap(
-                    Component.useScope([], this),
-                    scope => Effect.provideService(this.body(props as P), Scope.Scope, scope),
+            const promise = Effect.runPromiseWith(
+                Context.add(
+                    contextRef.current,
+                    Scope.Scope,
+                    Component.useScopeWith(contextRef, [], this),
                 )
-            )
+            )(this.body(props as P))
+            // A render that React discards (StrictMode, an error boundary retrying) never hands its promise to `use`,
+            // so nothing would observe its failure. `use` still sees the rejection, as it attaches its own handlers.
+            promise.catch(() => {})
 
             return React.createElement(
                 React.Suspense,

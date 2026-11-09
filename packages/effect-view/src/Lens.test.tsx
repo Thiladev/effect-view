@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { Effect, Layer, SubscriptionRef } from "effect"
 import * as React from "react"
 import { describe, expect, it } from "vitest"
@@ -7,26 +7,21 @@ import * as Lens from "./Lens.js"
 import * as ReactRuntime from "./ReactRuntime.js"
 
 
-const makeRuntime = async () => {
-    const runtime = ReactRuntime.make(Layer.empty)
-    const effectRuntime = await runtime.runtime.context()
-
-    return {
-        runtime,
-        effectRuntime,
-        dispose: () => runtime.runtime.dispose(),
-    }
-}
-
 const expectDefined = <A,>(value: A | undefined): A => {
     if (value === undefined)
         throw new Error("Expected value to be defined")
     return value
 }
 
+const renderAsync = async (ui: React.ReactElement) => {
+    let view!: ReturnType<typeof render>
+    await act(async () => { view = render(ui) })
+    return view
+}
+
 describe("Lens", () => {
     it("useState stays in sync with lens updates in both directions", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         const ref = await Effect.runPromise(SubscriptionRef.make(0))
         const lens = Lens.fromSubscriptionRef(ref)
 
@@ -43,10 +38,10 @@ describe("Lens", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("0")
@@ -59,11 +54,10 @@ describe("Lens", () => {
         expect(await Effect.runPromise(Lens.get(lens))).toBe(6)
 
         view.unmount()
-        await dispose()
     })
 
     it("useState respects the provided equivalence when subscribing to lens changes", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         const ref = await Effect.runPromise(SubscriptionRef.make({ id: 1, label: "first" }))
         const lens = Lens.fromSubscriptionRef(ref)
 
@@ -77,10 +71,10 @@ describe("Lens", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first")
@@ -93,11 +87,10 @@ describe("Lens", () => {
         await screen.findByText("updated")
 
         view.unmount()
-        await dispose()
     })
 
     it("useFromReactState writes React state changes into the returned lens", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         let lens: Lens.Lens<string, never, never, never, never> | undefined
 
         const Probe = Component.makeUntraced("LensUseFromReactStateProbe")(function*() {
@@ -113,10 +106,10 @@ describe("Lens", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("hello")
@@ -127,11 +120,10 @@ describe("Lens", () => {
         await waitFor(async () => expect(await Effect.runPromise(Lens.get(expectDefined(lens)))).toBe("hello!"))
 
         view.unmount()
-        await dispose()
     })
 
     it("useFromReactState respects equivalence when lens updates flow back into React state", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         let lens: Lens.Lens<{ readonly id: number; readonly label: string }, never, never, never, never> | undefined
 
         const Probe = Component.makeUntraced("LensUseFromReactStateEquivalenceProbe")(function*() {
@@ -149,10 +141,10 @@ describe("Lens", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first")
@@ -166,6 +158,5 @@ describe("Lens", () => {
         await screen.findByText("updated")
 
         view.unmount()
-        await dispose()
     })
 })

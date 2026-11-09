@@ -36,6 +36,9 @@ removing, or changing a hook call resets the Effect View implementation. Add
 - Definitions must be top-level variable, class, or default-export
   declarations.
 - Hook signature analysis is conservative and based on `useX` call syntax.
-- Changing a descriptor's trait pipeline during a refresh is not guaranteed to
-  preserve state.
+- Only the body of a component is refreshed. Changing what is applied to the
+  descriptor afterwards (adding `Async.async`, changing the options of
+  `Component.withOptions`, the layer of `Component.provide`...) takes effect
+  when the descriptor is created again, that is after a full reload.
+- A factory call must have its function inline (`Component.make("Name")(function*() {})`).
 - Source maps for the injected transform are not generated yet.

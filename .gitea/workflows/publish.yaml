@@ -78,3 +78,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Trigger Renovate
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: token ${{ secrets.RENOVATE_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref": "master"}' \
+            https://git.valverde.cloud/api/v1/repos/renovate-bot/renovate/actions/workflows/renovate.yaml/dispatches

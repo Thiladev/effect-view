@@ -1,3 +1,5 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
 import type * as Preset from "@docusaurus/preset-classic"
 import type { Config } from "@docusaurus/types"
 import { themes as prismThemes } from "prism-react-renderer"
@@ -6,6 +8,12 @@ import githubDark from "./src/prism/github-dark"
 import remarkLineNumbers from "./src/remark/line-numbers"
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+// One API reference page per module of effect-view: every `src/*.ts` file, except the index, the tests and the benchmarks.
+const effectViewSource = path.resolve(__dirname, "../effect-view/src")
+const effectViewModules = fs.readdirSync(effectViewSource)
+  .filter(file => file.endsWith(".ts") && !/\.(test|bench)\.ts$/.test(file) && file !== "index.ts" && file !== "setup-tests.ts")
+  .map(file => path.join(effectViewSource, file))
 
 const config: Config = {
   title: "Effect View",
@@ -37,6 +45,22 @@ const config: Config = {
     defaultLocale: "en",
     locales: ["en"],
   },
+
+  plugins: [
+    [
+      "docusaurus-plugin-typedoc",
+      {
+        entryPoints: effectViewModules,
+        tsconfig: "../effect-view/tsconfig.json",
+        out: "docs/api",
+        readme: "none",
+        outputFileStrategy: "modules",
+        hidePageTitle: false,
+        excludeExternals: true,
+        sidebar: { autoConfiguration: false },
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -84,6 +108,12 @@ const config: Config = {
           sidebarId: "docsSidebar",
           position: "left",
           label: "Docs",
+        },
+        {
+          type: "docSidebar",
+          sidebarId: "apiSidebar",
+          position: "left",
+          label: "API",
         },
         {
           type: "docsVersionDropdown",

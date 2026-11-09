@@ -16,7 +16,7 @@ When writing effect-view code, use the actual current source and tests in `src/`
 
 ## Find the right doc by what you're trying to do
 
-**Setting up the app** — building the runtime, providing it to the tree → [ReactRuntime.md](./ai-docs/ReactRuntime.md)
+**Setting up the app** — building the runtime, providing it to the tree, giving a subtree (a router layout and its routes) its own services → [ReactRuntime.md](./ai-docs/ReactRuntime.md)
 
 **Defining a component, its lifecycle, or running Effects from event handlers** → [Component.md](./ai-docs/Component.md)
 

@@ -3,25 +3,27 @@ import type * as Component from "./Component.js"
 import * as Refreshable from "./Refreshable.js"
 
 
+const descriptor = (body: unknown = () => {}) => ({ body }) as unknown as Component.Component.Any
+
 describe("Refreshable", () => {
     it("attaches a cell and notifies subscribers after a compatible update", async () => {
-        const first = {} as Component.Component.Any
+        const firstBody = () => {}
+        const first = descriptor(firstBody)
         const cell = Refreshable.makeCell(first, "hooks", false)
         const listener = vi.fn()
 
+        expect(cell.body).toBe(firstBody)
         expect(Refreshable.isRefreshable(first)).toBe(false)
         const attached = Refreshable.attach(first, cell)
         expect(attached).toBe(first)
         expect(Refreshable.isRefreshable(first)).toBe(true)
         expect(attached[Refreshable.RefreshableTypeId]).toBe(cell)
-        expect(Object.getPrototypeOf(attached).asFunctionComponent)
-            .toBe(Refreshable.RefreshablePrototype.asFunctionComponent)
 
         cell.subscribe(listener)
-        const second = {} as Component.Component.Any
-        cell.update(second, "hooks", false)
+        const secondBody = () => {}
+        cell.update(descriptor(secondBody), "hooks", false)
 
-        expect(cell.current).toBe(second)
+        expect(cell.body).toBe(secondBody)
         expect(cell.snapshot).toEqual({
             revision: 1,
             resetRevision: 0,
@@ -32,29 +34,39 @@ describe("Refreshable", () => {
     })
 
     it("requests a remount when a signature changes or reset is forced", () => {
-        const component = {} as Component.Component.Any
-        const cell = Refreshable.makeCell(component, "one", false)
+        const cell = Refreshable.makeCell(descriptor(), "one", false)
 
-        cell.update({} as Component.Component.Any, "two", false)
+        cell.update(descriptor(), "two", false)
         expect(cell.snapshot.resetRevision).toBe(1)
 
-        cell.update({} as Component.Component.Any, "two", true)
+        cell.update(descriptor(), "two", true)
         expect(cell.snapshot.resetRevision).toBe(2)
     })
 
-    it("builds the refresh shell from the current descriptor implementation", () => {
-        const implementation = () => null
-        const makeFunctionComponent = vi.fn(() => implementation)
-        const component = {
-            makeFunctionComponent,
-        } as unknown as Component.ComponentImpl.Any
-        const contextRef = {
-            current: {},
-        } as never
+    it("replaces the body of the descriptor, and a copy of the descriptor is refreshable too", () => {
+        const original = () => {}
+        const component = descriptor(original)
         const cell = Refreshable.makeCell(component, "hooks", false)
-        const attached = Refreshable.attach(component, cell)
+        Refreshable.attach(component, cell)
 
-        expect(attached.asFunctionComponent(contextRef)).not.toBe(implementation)
-        expect(makeFunctionComponent).toHaveBeenCalledWith(contextRef)
+        const body = (component as unknown as { body: unknown }).body
+        expect(body).not.toBe(original)
+
+        // A descriptor derived from this one (`Async.async`, `Component.provide`, ...) copies its properties.
+        const derived = Object.assign({}, component) as unknown as Component.Component.Any
+        expect(Refreshable.isRefreshable(derived)).toBe(true)
+        expect(derived[Refreshable.RefreshableTypeId as never]).toBe(cell)
+        expect((derived as unknown as { body: unknown }).body).toBe(body)
+    })
+
+    it("never takes the body that attach put in a descriptor for its own", () => {
+        const original = () => {}
+        const component = descriptor(original)
+        const cell = Refreshable.makeCell(component, "hooks", false)
+        Refreshable.attach(component, cell)
+
+        // Updating the cell from a descriptor that is already attached does not make the cell run itself.
+        cell.update(component, "hooks", false)
+        expect(cell.body).toBe(original)
     })
 })

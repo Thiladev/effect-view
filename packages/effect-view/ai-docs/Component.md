@@ -34,7 +34,7 @@ const Hello = yield* HelloView.use
 return <Hello name="Effect" />
 ```
 
-`component.use` is an `Effect<F, never, Exclude<R, Scope.Scope>>` that binds the child to the current Effect context/scope and returns a stable function-component reference. Yield it from a parent component body; do not call `withContext` here.
+`component.use` is an `Effect<F, never, R>` that binds the child to the current Effect context/scope and returns a stable function-component reference. Yield it from a parent component body; do not call `withContext` here.
 
 ## Lifecycle hooks
 

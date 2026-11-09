@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { Context, Effect, HashMap, Layer, SubscriptionRef } from "effect"
+import { Context, type Duration, Effect, HashMap, Layer, ManagedRuntime, Ref } from "effect"
 import * as React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as Async from "./Async.js"
 import * as Component from "./Component.js"
 import * as ReactRuntime from "./ReactRuntime.js"
 import * as Refreshable from "./Refreshable.js"
@@ -16,6 +17,12 @@ afterEach(() => {
     vi.useRealTimers()
 })
 
+const renderAsync = async (ui: React.ReactElement) => {
+    let view!: ReturnType<typeof render>
+    await act(async () => { view = render(ui) })
+    return view
+}
+
 describe("Component", () => {
     it("provides a layer once per mounted component instance", async () => {
         const setup = vi.fn()
@@ -27,7 +34,6 @@ describe("Component", () => {
             return { value: `${parent.prefix} value` }
         }))
         const runtime = ReactRuntime.make(Layer.succeed(ParentService, { prefix: "provided" }))
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("ProvidedServiceProbe")(function*() {
             const service = yield* ValueService
@@ -37,19 +43,19 @@ describe("Component", () => {
             Component.withContext(runtime.context),
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         expect(await screen.findByText("provided value")).toBeTruthy()
         expect(setup).toHaveBeenCalledTimes(1)
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         expect(await screen.findByText("provided value")).toBeTruthy()
@@ -57,13 +63,11 @@ describe("Component", () => {
 
         view.unmount()
         await waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1))
-        await runtime.runtime.dispose()
     })
 
     it("does not rerun useOnMount across rerenders after Strict Mode initialization", async () => {
         const onMount = vi.fn(() => Effect.succeed("mounted"))
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("UseOnMountProbe")(function*() {
             const value = yield* Component.useOnMount(onMount)
@@ -72,31 +76,29 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("mounted")
         expect(onMount).toHaveBeenCalledTimes(2)
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
         expect(await screen.findByText("mounted")).toBeTruthy()
         expect(onMount).toHaveBeenCalledTimes(2)
 
         view.unmount()
-        await runtime.runtime.dispose()
     })
 
     it("recomputes useOnChange only when dependencies change", async () => {
         const onChange = vi.fn((value: number) => Effect.succeed(`value:${value}`))
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("UseOnChangeProbe")(function*(props: { readonly value: number }) {
             const result = yield* Component.useOnChange(() => onChange(props.value), [props.value], {
@@ -108,41 +110,39 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value={1} />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("value:1")
         expect(onChange).toHaveBeenCalledTimes(2)
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value={1} />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         expect(await screen.findByText("value:1")).toBeTruthy()
         expect(onChange).toHaveBeenCalledTimes(2)
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value={2} />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("value:2")
         expect(onChange).toHaveBeenCalledTimes(4)
 
         view.unmount()
-        await runtime.runtime.dispose()
     })
 
     it("closes the previous scope on dependency changes and unmount", async () => {
         const cleanup = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("ScopeCleanupProbe")(function*(props: { readonly value: string }) {
             const result = yield* Component.useOnChange(
@@ -159,19 +159,19 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value="first" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first")
         expect(cleanup).not.toHaveBeenCalled()
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value="second" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("second")
@@ -182,13 +182,11 @@ describe("Component", () => {
 
         await waitFor(() => expect(cleanup).toHaveBeenCalledWith("second"))
         expect(cleanup).toHaveBeenCalledTimes(2)
-        await runtime.runtime.dispose()
     })
 
     it("runs useReactEffect setup and cleanup when dependencies change", async () => {
         const lifecycle = vi.fn<(message: string) => void>()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("UseReactEffectProbe")(function*(props: { readonly value: string }) {
             yield* Component.useReactEffect(() =>
@@ -203,19 +201,19 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value="first" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first")
         await waitFor(() => expect(lifecycle).toHaveBeenCalledWith("mount:first"))
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value="second" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("second")
@@ -233,12 +231,10 @@ describe("Component", () => {
             "mount:second",
             "cleanup:second",
         ])
-        await runtime.runtime.dispose()
     })
 
     it("keeps useCallbackSync stable until dependencies change", async () => {
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
         const seenCallbacks: Array<(value: number) => string> = []
 
         const Probe = Component.makeUntraced("UseCallbackSyncProbe")(function*(props: { readonly prefix: string }) {
@@ -260,10 +256,10 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe prefix="a" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("a:1")
@@ -272,18 +268,18 @@ describe("Component", () => {
         expect(initialCallback?.(2)).toBe("a:2")
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe prefix="a" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("a:1")
         expect(seenCallbacks).toHaveLength(initialLength)
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe prefix="b" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("b:1")
@@ -292,13 +288,11 @@ describe("Component", () => {
         expect(seenCallbacks.at(-1)?.(2)).toBe("b:2")
 
         view.unmount()
-        await runtime.runtime.dispose()
     })
 
     it("delays cleanup according to finalizerExecutionDebounce", async () => {
         const cleanup = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const Probe = Component.makeUntraced("DebouncedCleanupProbe")(function*(props: { readonly value: string }) {
             const result = yield* Component.useOnChange(
@@ -315,19 +309,23 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
-                <Probe value="first" />
-            </runtime.context.Provider>
-        )
-
-        await screen.findByText("first")
+        // Fake timers must be installed before anything starts a timer: a real timer started earlier (the registry's
+        // sweeper sleeping until a deadline) would never be advanced by the fake clock.
         vi.useFakeTimers()
 
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
+                <Probe value="first" />
+            </ReactRuntime.Provider>
+        )
+
+        await vi.advanceTimersByTimeAsync(1)
+        expect(screen.getByText("first")).toBeTruthy()
+
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe value="second" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         expect(screen.getByText("second")).toBeTruthy()
@@ -343,14 +341,12 @@ describe("Component", () => {
         await vi.advanceTimersByTimeAsync(20)
         expect(cleanup).toHaveBeenCalledWith("second")
         vi.useRealTimers()
-        await runtime.runtime.dispose()
     })
 
     it("does not remount a component when only nonReactiveTags change", async () => {
         const mounts = vi.fn()
         const unmounts = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const SubComponent = Component.makeUntraced("NonReactiveSubComponent")(function*() {
             const service = yield* ValueService
@@ -383,10 +379,10 @@ describe("Component", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Parent value="first" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first:0")
@@ -398,9 +394,9 @@ describe("Component", () => {
         await screen.findByText("first:1")
 
         view.rerender(
-            <runtime.context.Provider value={effectRuntime}>
+            <ReactRuntime.Provider runtime={runtime}>
                 <Parent value="second" />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("second:1")
@@ -409,13 +405,13 @@ describe("Component", () => {
 
         view.unmount()
         await waitFor(() => expect(unmounts).toHaveBeenCalledTimes(1))
-        await runtime.runtime.dispose()
     })
 
     it("does not commit effects or retain registered scopes for a discarded Suspense render", async () => {
         const setup = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
+        const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+        const effectRuntime = await managed.context()
         const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
         const pending = new Promise<void>(() => {})
 
@@ -442,11 +438,11 @@ describe("Component", () => {
         try {
             await screen.findByText("fallback")
             expect(setup).not.toHaveBeenCalled()
-            await waitFor(() => expect(HashMap.size(Effect.runSync(SubscriptionRef.get(scopeRegistry.ref)))).toBe(0))
+            await waitFor(() => expect(HashMap.size(Effect.runSync(Ref.get(scopeRegistry.ref)))).toBe(0))
         }
         finally {
             view.unmount()
-            await runtime.runtime.dispose()
+            await managed.dispose()
         }
     })
 
@@ -454,7 +450,8 @@ describe("Component", () => {
         const acquisitions = vi.fn()
         const releases = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
+        const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+        const effectRuntime = await managed.context()
         const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
 
         const Probe = Component.makeUntraced("CommittedScopeProbe")(function*() {
@@ -482,13 +479,13 @@ describe("Component", () => {
         await waitFor(() => expect(releases).toHaveBeenCalledTimes(acquisitions.mock.calls.length - 1))
         await new Promise(resolve => setTimeout(resolve, 30))
 
-        expect(HashMap.size(Effect.runSync(SubscriptionRef.get(scopeRegistry.ref)))).toBe(1)
+        expect(HashMap.size(Effect.runSync(Ref.get(scopeRegistry.ref)))).toBe(1)
         expect(releases).toHaveBeenCalledTimes(acquisitions.mock.calls.length - 1)
 
         view.unmount()
         await waitFor(() => expect(releases).toHaveBeenCalledTimes(acquisitions.mock.calls.length))
-        await waitFor(() => expect(HashMap.size(Effect.runSync(SubscriptionRef.get(scopeRegistry.ref)))).toBe(0))
-        await runtime.runtime.dispose()
+        await waitFor(() => expect(HashMap.size(Effect.runSync(Ref.get(scopeRegistry.ref)))).toBe(0))
+        await managed.dispose()
     })
 
     it("does not expire a scope while a descendant is suspended past the finalizer debounce", async () => {
@@ -523,14 +520,14 @@ describe("Component", () => {
         }
         finally {
             view.unmount()
-            await runtime.runtime.dispose()
         }
     })
 
     it("clears ScopeRegistry after a suspended render retries, commits, and unmounts", async () => {
         const lifecycle = vi.fn<(message: string) => void>()
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
+        const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+        const effectRuntime = await managed.context()
         const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
         let resolve!: () => void
         const pending = new Promise<void>(complete => {
@@ -570,19 +567,18 @@ describe("Component", () => {
             await waitFor(() => expect(lifecycle).toHaveBeenCalledWith("mount"))
 
             view.unmount()
-            await waitFor(() => expect(HashMap.size(Effect.runSync(SubscriptionRef.get(scopeRegistry.ref)))).toBe(0))
+            await waitFor(() => expect(HashMap.size(Effect.runSync(Ref.get(scopeRegistry.ref)))).toBe(0))
             expect(lifecycle.mock.calls.filter(([message]) => message === "mount")).toHaveLength(2)
             expect(lifecycle.mock.calls.filter(([message]) => message === "cleanup")).toHaveLength(2)
         }
         finally {
             view.unmount()
-            await runtime.runtime.dispose()
+            await managed.dispose()
         }
     })
 
     it("refreshes a registered body while preserving or resetting local state", async () => {
         const runtime = ReactRuntime.make(Layer.empty)
-        const effectRuntime = await runtime.runtime.context()
 
         const makeProbe = (label: string) => Component.makeUntraced("RefreshProbe")(function*() {
             const [count, setCount] = React.useState(0)
@@ -593,10 +589,10 @@ describe("Component", () => {
         Refreshable.attach(original, cell)
 
         const Probe = Component.withContext(original, runtime.context)
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         fireEvent.click(await screen.findByRole("button"))
@@ -615,6 +611,284 @@ describe("Component", () => {
         expect(screen.getByRole("button").textContent).toBe("reset:0")
 
         view.unmount()
-        await runtime.runtime.dispose()
+    })
+
+    it("refreshes a component derived from a registered descriptor, which keeps its own traits", async () => {
+        const runtime = ReactRuntime.make(Layer.empty)
+
+        const makeBase = (label: string) => Component.makeUntraced("RefreshAsyncBase")(function*() {
+            yield* Effect.sleep("5 millis")
+            return <div>{label}</div>
+        })
+        const base = makeBase("one")
+        const cell = Refreshable.makeCell(base, "hooks", false)
+        Refreshable.attach(base, cell)
+
+        // Derived in a statement of its own, which the Vite plugin does not register.
+        const Page = Component.withContext(base.pipe(Async.async), runtime.context)
+
+        let view!: ReturnType<typeof render>
+        await act(async () => {
+            view = render(
+                <ReactRuntime.Provider runtime={runtime}>
+                    <Page fallback={<i>loading</i>} />
+                </ReactRuntime.Provider>
+            )
+        })
+        expect(await screen.findByText("one")).toBeTruthy()
+
+        await act(async () => {
+            cell.update(makeBase("two"), "hooks", false)
+            await Promise.resolve()
+        })
+        expect(await screen.findByText("two")).toBeTruthy()
+
+        view.unmount()
+    })
+
+    it("refreshes a child used with .use, and remounts only the child when its hooks change", async () => {
+        const runtime = ReactRuntime.make(Layer.empty)
+
+        const makeChild = (label: string) => Component.makeUntraced("RefreshChild")(function*() {
+            const [count, setCount] = React.useState(0)
+            return <button type="button" aria-label="child" onClick={() => setCount(value => value + 1)}>{label}:{count}</button>
+        })
+        const makeChildWithMoreHooks = (label: string) => Component.makeUntraced("RefreshChild")(function*() {
+            const [count, setCount] = React.useState(0)
+            const [suffix] = React.useState("!")
+            return <button type="button" aria-label="child" onClick={() => setCount(value => value + 1)}>{label}:{count}{suffix}</button>
+        })
+        const child = makeChild("one")
+        const cell = Refreshable.makeCell(child, "one hook", false)
+        Refreshable.attach(child, cell)
+
+        const Parent = Component.makeUntraced("RefreshParent")(function*() {
+            const [count, setCount] = React.useState(0)
+            const Child = yield* child.use
+
+            return <>
+                <button type="button" aria-label="parent" onClick={() => setCount(value => value + 1)}>parent:{count}</button>
+                <Child />
+            </>
+        }).pipe(Component.withContext(runtime.context))
+
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
+                <Parent />
+            </ReactRuntime.Provider>
+        )
+
+        fireEvent.click(await screen.findByLabelText("parent"))
+        fireEvent.click(screen.getByLabelText("child"))
+        expect(screen.getByLabelText("parent").textContent).toBe("parent:1")
+        expect(screen.getByLabelText("child").textContent).toBe("one:1")
+
+        await act(async () => {
+            cell.update(makeChild("two"), "one hook", false)
+            await Promise.resolve()
+        })
+        expect(screen.getByLabelText("child").textContent).toBe("two:1")
+
+        await act(async () => {
+            cell.update(makeChildWithMoreHooks("three"), "two hooks", false)
+            await Promise.resolve()
+        })
+        expect(screen.getByLabelText("child").textContent).toBe("three:0!")
+        expect(screen.getByLabelText("parent").textContent).toBe("parent:1")
+
+        view.unmount()
+    })
+
+    describe("inside a hidden React.Activity", () => {
+        const setup = async (options: { readonly finalizerExecutionDebounce: Duration.Input }) => {
+            const log: string[] = []
+            let acquired = 0
+            const runtime = ReactRuntime.make(Layer.empty)
+            const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+            const effectRuntime = await managed.context()
+            const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
+
+            const Probe = Component.makeUntraced("ActivityProbe")(function*() {
+                const [count, setCount] = React.useState(0)
+                const id = yield* Component.useOnMount(() => Effect.gen(function*() {
+                    const id = ++acquired
+                    log.push(`acquire ${id}`)
+                    yield* Effect.addFinalizer(() => Effect.sync(() => { log.push(`release ${id}`) }))
+                    return id
+                }))
+
+                return <button type="button" onClick={() => setCount(count + 1)}>probe {id}:{count}</button>
+            }).pipe(
+                // Under StrictMode the discarded render registers a scope that is never committed.
+                Component.withOptions({ ...options, scopeCommitTimeout: "50 millis" }),
+                Component.withContext(runtime.context),
+            )
+
+            const tree = (mode: "visible" | "hidden") => (
+                <runtime.context.Provider value={effectRuntime}>
+                    <React.Activity mode={mode}>
+                        <Probe />
+                    </React.Activity>
+                </runtime.context.Provider>
+            )
+            const wait = (ms: number) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
+            const registrySize = () => HashMap.size(Effect.runSync(Ref.get(scopeRegistry.ref)))
+
+            return { log, tree, wait, registrySize, managed }
+        }
+
+        it("keeps the state of a component that is shown again before its scope is closed", async () => {
+            const { log, tree, wait, managed } = await setup({ finalizerExecutionDebounce: "500 millis" })
+
+            const view = render(tree("visible"))
+            fireEvent.click(await screen.findByRole("button"))
+            expect(screen.getByRole("button").textContent).toBe("probe 1:1")
+
+            view.rerender(tree("hidden"))
+            await wait(30)
+            view.rerender(tree("visible"))
+            await wait(30)
+
+            expect(screen.getByRole("button").textContent).toBe("probe 1:1")
+            expect(log).toEqual(["acquire 1"])
+
+            view.unmount()
+            await managed.dispose()
+        })
+
+        it("replaces the scope and acquires its resources again, keeping the state, when it is shown after its scope was closed", async () => {
+            const { log, tree, wait, registrySize, managed } = await setup({ finalizerExecutionDebounce: "20 millis" })
+
+            const view = render(tree("visible"))
+            fireEvent.click(await screen.findByRole("button"))
+            expect(screen.getByRole("button").textContent).toBe("probe 1:1")
+
+            view.rerender(tree("hidden"))
+            await wait(120)
+            expect(log).toEqual(["acquire 1", "release 1"])
+            expect(registrySize()).toBe(0)
+
+            view.rerender(tree("visible"))
+            await wait(60)
+
+            expect(screen.getByRole("button").textContent).toBe("probe 2:1")
+            expect(log).toEqual(["acquire 1", "release 1", "acquire 2"])
+            expect(registrySize()).toBe(1)
+
+            view.unmount()
+            await wait(120)
+            expect(log).toEqual(["acquire 1", "release 1", "acquire 2", "release 2"])
+            expect(registrySize()).toBe(0)
+
+            await managed.dispose()
+        })
+
+        it("computes a hook again, keeping the component, when only the scope of the hook was closed", async () => {
+            const log: string[] = []
+            let acquired = 0
+            const runtime = ReactRuntime.make(Layer.empty)
+            const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+            const effectRuntime = await managed.context()
+
+            const Probe = Component.makeUntraced("ActivityHookProbe")(function*() {
+                const [count, setCount] = React.useState(0)
+                const id = yield* Component.useOnChange(
+                    () => Effect.gen(function*() {
+                        const id = ++acquired
+                        log.push(`acquire ${id}`)
+                        yield* Effect.addFinalizer(() => Effect.sync(() => { log.push(`release ${id}`) }))
+                        return id
+                    }),
+                    [],
+                    { finalizerExecutionDebounce: "20 millis" },
+                )
+
+                return <button type="button" onClick={() => setCount(count + 1)}>hook {id}:{count}</button>
+            }).pipe(
+                // The scope of the component outlives the one of the hook.
+                Component.withOptions({ finalizerExecutionDebounce: "5 seconds", scopeCommitTimeout: "50 millis" }),
+                Component.withContext(runtime.context),
+            )
+
+            const tree = (mode: "visible" | "hidden") => (
+                <runtime.context.Provider value={effectRuntime}>
+                    <React.Activity mode={mode}>
+                        <Probe />
+                    </React.Activity>
+                </runtime.context.Provider>
+            )
+            const wait = (ms: number) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
+
+            const view = render(tree("visible"))
+            fireEvent.click(await screen.findByRole("button"))
+            expect(screen.getByRole("button").textContent).toBe("hook 1:1")
+
+            view.rerender(tree("hidden"))
+            await wait(120)
+            expect(log).toEqual(["acquire 1", "release 1"])
+
+            view.rerender(tree("visible"))
+            await wait(60)
+
+            expect(screen.getByRole("button").textContent).toBe("hook 2:1")
+            expect(log).toEqual(["acquire 1", "release 1", "acquire 2"])
+
+            view.unmount()
+            await managed.dispose()
+        })
+        it("builds the layer of Component.provide again, keeping the state, when its scope was closed while hidden", async () => {
+            const log: string[] = []
+            let built = 0
+            const runtime = ReactRuntime.make(Layer.empty)
+            const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
+            const effectRuntime = await managed.context()
+
+            const ValueLayer = Layer.effect(ValueService, Effect.gen(function*() {
+                const id = ++built
+                log.push(`build ${id}`)
+                yield* Effect.addFinalizer(() => Effect.sync(() => { log.push(`release ${id}`) }))
+                return { value: `layer ${id}` }
+            }))
+
+            const Probe = Component.makeUntraced("ActivityProvideProbe")(function*() {
+                const service = yield* ValueService
+                const [count, setCount] = React.useState(0)
+
+                return <button type="button" onClick={() => setCount(count + 1)}>{service.value}:{count}</button>
+            }).pipe(
+                Component.provide(ValueLayer),
+                Component.withOptions({ finalizerExecutionDebounce: "20 millis", scopeCommitTimeout: "50 millis" }),
+                Component.withContext(runtime.context),
+            )
+
+            const tree = (mode: "visible" | "hidden") => (
+                <runtime.context.Provider value={effectRuntime}>
+                    <React.Activity mode={mode}>
+                        <Probe />
+                    </React.Activity>
+                </runtime.context.Provider>
+            )
+            const wait = (ms: number) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
+
+            const view = render(tree("visible"))
+            fireEvent.click(await screen.findByRole("button"))
+            expect(screen.getByRole("button").textContent).toBe("layer 1:1")
+
+            view.rerender(tree("hidden"))
+            await wait(120)
+            expect(log).toEqual(["build 1", "release 1"])
+
+            view.rerender(tree("visible"))
+            await wait(60)
+
+            expect(screen.getByRole("button").textContent).toBe("layer 2:1")
+            expect(log).toEqual(["build 1", "release 1", "build 2"])
+
+            view.unmount()
+            await wait(120)
+            expect(log).toEqual(["build 1", "release 1", "build 2", "release 2"])
+
+            await managed.dispose()
+        })
     })
 })

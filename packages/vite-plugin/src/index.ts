@@ -32,11 +32,9 @@ interface ComponentImports {
 }
 
 interface Definition {
-    readonly expression: ts.Expression
-    readonly wrapTarget: ts.Expression
+    readonly factoryCall: ts.CallExpression
     readonly body: ts.FunctionLikeDeclaration | undefined
     readonly id: string
-    readonly site: EntrypointSite.Pipe | undefined
 }
 
 const defaultInclude = /\.[cm]?[jt]sx?$/
@@ -123,6 +121,13 @@ const functionArgument = (
     || ts.isFunctionExpression(argument)
 ) as ts.FunctionLikeDeclaration | undefined
 
+/**
+ * Finds the call that creates the descriptor of a component, wherever it is
+ * within an expression: `Component.make(function*() {})` or
+ * `Component.make("Name")(function*() {})`. What is done to the descriptor
+ * afterwards (`.pipe(...)`, `Async.async`, `withContext`, a helper function...)
+ * does not matter: a descriptor derived from a refreshable one follows it.
+ */
 const findFactoryCall = (
     root: ts.Node,
     imports: ComponentImports,
@@ -142,105 +147,29 @@ const findFactoryCall = (
         // Never look inside a nested function body: a factory call there
         // belongs to a different, unrelated component (e.g. one composed
         // dynamically inside this component's own render), not to the
-        // composition shape of the definition being analyzed.
+        // definition being analyzed.
         if (node !== root && ts.isFunctionLike(node))
             return
 
         if (ts.isCallExpression(node)) {
+            // `Component.make(function*() {})`. Without a function it is the
+            // first call of `Component.make("Name")(...)`, which is not a
+            // descriptor yet.
             if (isFactoryCallee(node.expression, imports)) {
+                const body = functionArgument(node)
+                if (body) {
+                    result = { factoryCall: node, body }
+                    return
+                }
+            }
+            // `Component.make("Name")(function*() {})`
+            else if (ts.isCallExpression(node.expression) && isFactoryCallee(node.expression.expression, imports)) {
                 result = {
                     factoryCall: node,
                     body: functionArgument(node),
                 }
                 return
             }
-
-            if (ts.isCallExpression(node.expression) && isFactoryCallee(node.expression.expression, imports)) {
-                result = {
-                    factoryCall: node,
-                    body: functionArgument(node),
-                }
-                return
-            }
-        }
-
-        ts.forEachChild(node, visit)
-    }
-
-    visit(root)
-    return result
-}
-
-const isPipeline = (node: ts.Node): node is ts.CallExpression =>
-    ts.isCallExpression(node)
-    && ts.isPropertyAccessExpression(node.expression)
-    && node.expression.name.text === "pipe"
-
-const entrypointName = (callee: ts.Expression): boolean =>
-    ts.isPropertyAccessExpression(callee)
-    && (callee.name.text === "withRuntime" || callee.name.text === "withContext")
-
-/**
- * A curried entrypoint call (`withContext(context)`) used as one step of a
- * `.pipe(...)` chain: the descriptor produced by the preceding steps must be
- * registered *before* this step runs, since it is what converts the
- * descriptor into a plain React function component.
- */
-const isEntrypoint = (expression: ts.Expression): boolean =>
-    ts.isCallExpression(expression) && entrypointName(expression.expression)
-
-/**
- * The data-first form of an entrypoint call (`withContext(descriptor,
- * context)`), which can appear anywhere - not only inside a `.pipe(...)`
- * chain - and always takes the descriptor to convert as its first argument.
- */
-const isEntrypointDataFirst = (node: ts.Node): node is ts.CallExpression =>
-    ts.isCallExpression(node)
-    && entrypointName(node.expression)
-    && node.arguments.length >= 2
-
-declare namespace EntrypointSite {
-    export interface Pipe {
-        readonly kind: "pipe"
-        readonly pipeCall: ts.CallExpression
-        readonly argIndex: number
-    }
-
-    export interface DataFirst {
-        readonly kind: "dataFirst"
-        readonly call: ts.CallExpression
-    }
-}
-
-type EntrypointSite = EntrypointSite.Pipe | EntrypointSite.DataFirst
-
-/**
- * Finds where, anywhere within a definition's composition expression, a
- * descriptor is converted into a plain React function component - whether
- * through a `.pipe(..., withContext(context))` chain or a direct
- * `withContext(descriptor, context)` call. Does not look inside nested
- * function bodies, for the same reason as `findFactoryCall`.
- */
-const findEntrypointSite = (root: ts.Node): EntrypointSite | undefined => {
-    let result: EntrypointSite | undefined
-
-    const visit = (node: ts.Node): void => {
-        if (result)
-            return
-
-        if (node !== root && ts.isFunctionLike(node))
-            return
-
-        if (isPipeline(node)) {
-            const argIndex = node.arguments.findIndex(isEntrypoint)
-            if (argIndex >= 0) {
-                result = { kind: "pipe", pipeCall: node, argIndex }
-                return
-            }
-        }
-        else if (isEntrypointDataFirst(node)) {
-            result = { kind: "dataFirst", call: node }
-            return
         }
 
         ts.forEachChild(node, visit)
@@ -256,33 +185,7 @@ const makeDefinition = (
     imports: ComponentImports,
 ): Definition | undefined => {
     const factory = findFactoryCall(expression, imports)
-    const site = findEntrypointSite(expression)
-
-    // A `.pipe(..., withContext(context))` chain always needs the splice
-    // treatment, whether or not a factory call could be found in this same
-    // statement (its base may be a component defined elsewhere).
-    if (site?.kind === "pipe")
-        return { expression, wrapTarget: expression, body: factory?.body, id, site }
-
-    // `withContext(descriptor, context)` always needs its descriptor
-    // argument wrapped directly, since by the time the call returns the
-    // result is a plain function component, not a Component descriptor.
-    if (site?.kind === "dataFirst") {
-        const target = site.call.arguments[0]
-        if (!target)
-            return undefined
-        return { expression, wrapTarget: target, body: factory?.body, id, site: undefined }
-    }
-
-    // No entrypoint conversion happens within this statement: the
-    // descriptor remains a Component.Any throughout, however it got here
-    // (a bare factory call, a `.pipe()` of traits with no withContext, or a
-    // user-defined composition helper wrapping either) - safe to register
-    // the whole expression.
-    if (!factory)
-        return undefined
-
-    return { expression, wrapTarget: expression, body: factory.body, id, site: undefined }
+    return factory ? { ...factory, id } : undefined
 }
 
 const collectDefinitions = (
@@ -397,12 +300,23 @@ const hash = (value: string): string => {
 
 const quote = (value: string): string => JSON.stringify(value)
 
+/**
+ * Registers the descriptor made by `expression`, and makes its module accept
+ * its own updates.
+ *
+ * The accept has to be a literal `import.meta.hot.accept()` in the source of
+ * the module that defines the descriptor: this is how Vite finds an HMR
+ * boundary. It is also in the registration itself, and not only at the end of
+ * the module, because other plugins move a component into a module of their
+ * own (the TanStack Router plugin does with `autoCodeSplitting`), and only the
+ * declaration of the component goes with it.
+ */
 const registration = (
     expression: string,
     definition: Definition,
     signature: string,
     forceReset: boolean,
-): string => `${refreshIdentifier}(${expression}, import.meta.hot, ${quote(definition.id)}, ${quote(signature)}, ${forceReset})`
+): string => `(import.meta.hot?.accept(), ${refreshIdentifier}(${expression}, import.meta.hot, ${quote(definition.id)}, ${quote(signature)}, ${forceReset}))`
 
 const applyEdits = (code: string, edits: readonly Edit[]): string => {
     let output = code
@@ -477,34 +391,15 @@ export function effectView(
             const edits: Edit[] = []
 
             for (const definition of definitions) {
-                const signature = hookSignature(definition.body)
-
-                if (definition.site?.kind === "pipe") {
-                    const entrypoint = definition.site.pipeCall.arguments[definition.site.argIndex]
-                    if (!entrypoint)
-                        continue
-                    edits.push({
-                        start: entrypoint.getStart(sourceFile),
-                        end: entrypoint.getStart(sourceFile),
-                        content: `(${refreshIdentifier}View) => ${registration(
-                            `${refreshIdentifier}View`,
-                            definition,
-                            signature,
-                            forceReset,
-                        )}, `,
-                    })
-                    continue
-                }
-
-                const start = definition.wrapTarget.getStart(sourceFile)
-                const end = definition.wrapTarget.end
+                const start = definition.factoryCall.getStart(sourceFile)
+                const end = definition.factoryCall.end
                 edits.push({
                     start,
                     end,
                     content: registration(
                         code.slice(start, end),
                         definition,
-                        signature,
+                        hookSignature(definition.body),
                         forceReset,
                     ),
                 })

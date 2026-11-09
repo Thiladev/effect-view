@@ -20,16 +20,19 @@ describe("refresh runtime", () => {
             accept: vi.fn(),
             invalidate: vi.fn(),
         }
-        const first = register(component({ body: "first" }), hot, "module:View", "hooks")
+        const firstBody = () => {}
+        const secondBody = () => {}
+        const first = register(component({ body: firstBody }), hot, "module:View", "hooks")
         const cell = refreshCell(first)
         const listener = vi.fn()
         cell.subscribe(listener)
+        expect(cell.body).toBe(firstBody)
 
-        const second = register(component({ body: "second" }), hot, "module:View", "hooks")
+        const second = register(component({ body: secondBody }), hot, "module:View", "hooks")
         const secondCell = refreshCell(second)
 
         expect(secondCell).toBe(cell)
-        expect(cell.current).toBe(second)
+        expect(cell.body).toBe(secondBody)
         expect(cell.snapshot).toEqual({
             revision: 1,
             resetRevision: 0,
@@ -45,20 +48,22 @@ describe("refresh runtime", () => {
             accept: vi.fn(),
             invalidate: vi.fn(),
         }
-        const first = register(component({}), hot, "module:View", "one")
+        const first = register(component({ body: () => {} }), hot, "module:View", "one")
         const cell = refreshCell(first)
 
-        register(component({}), hot, "module:View", "two")
+        register(component({ body: () => {} }), hot, "module:View", "two")
         expect(cell.snapshot.resetRevision).toBe(1)
 
-        register(component({}), hot, "module:View", "two", true)
+        register(component({ body: () => {} }), hot, "module:View", "two", true)
         expect(cell.snapshot.resetRevision).toBe(2)
     })
 
     it("is inert outside a Vite hot context", () => {
-        const descriptor = component({})
+        const body = () => {}
+        const descriptor = component({ body })
         expect(register(descriptor, undefined, "module:View", "hooks")).toBe(descriptor)
         expect(Refreshable.isRefreshable(descriptor)).toBe(false)
+        expect((descriptor as unknown as { body: unknown }).body).toBe(body)
     })
 
     it("invalidates when the module's View IDs change", () => {

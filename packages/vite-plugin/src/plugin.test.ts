@@ -51,7 +51,7 @@ export const CounterView = Component.make("CounterView")(function*() {
         expect(result).toContain("__effectViewAccept(import.meta.hot, [\"src/View.tsx:CounterView\"])")
     })
 
-    it("registers a pipeline before withContext", async () => {
+    it("registers only the factory call of a pipeline", async () => {
         const result = await transform(`
 import { Component } from "effect-view"
 
@@ -62,12 +62,12 @@ const Page = Component.make("Page")(function*() {
 )
 `)
 
-        expect(result).toContain("(__effectViewRefreshView) => __effectViewRefresh(__effectViewRefreshView")
+        expect(result).toMatch(/__effectViewRefresh\(Component\.make\("Page"\)\(function\*\(\) \{\s+return <main \/>\s+\}\), import\.meta\.hot, "src\/View\.tsx:Page", "[a-z0-9]+", false\)\)\.pipe\(/)
         expect(result).toContain("Component.withContext(runtime.context)")
-        expect(result).not.toContain("__effectViewRefresh(Component.make(\"Page\")")
+        expect(result).not.toContain("__effectViewRefreshView")
     })
 
-    it("wraps a class's complete trait pipeline", async () => {
+    it("registers only the factory call of a class's trait pipeline", async () => {
         const result = await transform(`
 import { Async, Component, Memoized } from "effect-view"
 
@@ -80,9 +80,7 @@ class PostView extends Component.make("PostView")(function*() {
 ) {}
 `)
 
-        expect(result).toContain("class PostView extends __effectViewRefresh(Component.make(\"PostView\")")
-        expect(result).toContain("Memoized.memoized,")
-        expect(result).toContain("\"src/View.tsx:PostView\"")
+        expect(result).toMatch(/class PostView extends \(import\.meta\.hot\?\.accept\(\), __effectViewRefresh\(Component\.make\("PostView"\)\([\s\S]*?\), import\.meta\.hot, "src\/View\.tsx:PostView", "[a-z0-9]+", false\)\)\.pipe\(\s+Async\.async,\s+Memoized\.memoized,/)
     })
 
     it("supports aliased Component imports and refresh reset", async () => {
@@ -147,11 +145,11 @@ export const LoggedView = withLogging(Component.make("LoggedView")(function*() {
 }))
 `)
 
-        expect(result).toContain("__effectViewRefresh(withLogging(Component.make(\"LoggedView\")")
+        expect(result).toContain("withLogging((import.meta.hot?.accept(), __effectViewRefresh(Component.make(\"LoggedView\")")
         expect(result).toContain("\"src/View.tsx:LoggedView\"")
     })
 
-    it("wraps the descriptor argument of a data-first withContext call", async () => {
+    it("registers the base of a data-first withContext call, and leaves the call alone", async () => {
         const result = await transform(`
 import { Component } from "effect-view"
 
@@ -163,7 +161,47 @@ export const Home = Component.withContext(HomeBase, runtime.context)
 `)
 
         expect(result).toContain("__effectViewRefresh(Component.make(\"Home\")")
-        expect(result).toContain("Component.withContext(__effectViewRefresh(HomeBase, import.meta.hot, \"src/View.tsx:Home\", \"unknown\", false), runtime.context)")
+        expect(result).toContain("\"src/View.tsx:HomeBase\"")
+        expect(result).toContain("export const Home = Component.withContext(HomeBase, runtime.context)")
+        expect(result).toContain("__effectViewAccept(import.meta.hot, [\"src/View.tsx:HomeBase\"])")
+    })
+
+    it("makes the registration accept the updates of its module, wherever the declaration ends up", async () => {
+        const result = await transform(`
+import { Component } from "effect-view"
+
+export const Home = Component.make("Home")(function*() {
+    return <div />
+})
+`)
+
+        // Another plugin can move the declaration into a module of its own, leaving the end of this one behind.
+        const declaration = result?.split("\n").filter(line => line.includes("const Home = ")).join("\n")
+        expect(declaration).toContain("import.meta.hot?.accept()")
+        expect(declaration).toContain("__effectViewRefresh(Component.make(\"Home\")")
+    })
+
+    it("does not register a descriptor derived from another definition", async () => {
+        const result = await transform(`
+import { Async, Component } from "effect-view"
+
+export const Post = Component.make("Post")(function*() {
+    return <div />
+})
+
+export const AsyncPost = Post.pipe(Async.async)
+`)
+
+        expect(result).toContain("__effectViewAccept(import.meta.hot, [\"src/View.tsx:Post\"])")
+        expect(result).toContain("export const AsyncPost = Post.pipe(Async.async)")
+    })
+
+    it("does not register the first call of a curried factory, which is not a descriptor yet", async () => {
+        expect(await transform(`
+import { Component } from "effect-view"
+
+export const make = Component.make("Named")
+`)).toBeUndefined()
     })
 
     it("keeps the same hook signature when only literal content inside a hook call changes", async () => {

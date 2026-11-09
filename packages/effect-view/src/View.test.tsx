@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { Effect, Layer, SubscriptionRef } from "effect"
 import { Lens } from "effect-lens"
 import { describe, expect, it } from "vitest"
@@ -7,20 +7,15 @@ import * as ReactRuntime from "./ReactRuntime.js"
 import * as View from "./View.js"
 
 
-const makeRuntime = async () => {
-    const runtime = ReactRuntime.make(Layer.empty)
-    const effectRuntime = await runtime.runtime.context()
-
-    return {
-        runtime,
-        effectRuntime,
-        dispose: () => runtime.runtime.dispose(),
-    }
+const renderAsync = async (ui: React.ReactElement) => {
+    let view!: ReturnType<typeof render>
+    await act(async () => { view = render(ui) })
+    return view
 }
 
 describe("View", () => {
     it("useAll returns the latest values and rerenders when any input changes", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         const countRef = await Effect.runPromise(SubscriptionRef.make(1))
         const labelRef = await Effect.runPromise(SubscriptionRef.make("a"))
         const count = Lens.fromSubscriptionRef(countRef)
@@ -34,10 +29,10 @@ describe("View", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("1:a")
@@ -49,11 +44,10 @@ describe("View", () => {
         await screen.findByText("2:b")
 
         view.unmount()
-        await dispose()
     })
 
     it("useAll respects the provided equivalence when processing updates", async () => {
-        const { runtime, effectRuntime, dispose } = await makeRuntime()
+        const runtime = ReactRuntime.make(Layer.empty)
         const itemRef = await Effect.runPromise(SubscriptionRef.make({ id: 1, label: "first" }))
         const flagRef = await Effect.runPromise(SubscriptionRef.make(true))
         const item = Lens.fromSubscriptionRef(itemRef)
@@ -70,10 +64,10 @@ describe("View", () => {
             Component.withContext(runtime.context)
         )
 
-        const view = render(
-            <runtime.context.Provider value={effectRuntime}>
+        const view = await renderAsync(
+            <ReactRuntime.Provider runtime={runtime}>
                 <Probe />
-            </runtime.context.Provider>
+            </ReactRuntime.Provider>
         )
 
         await screen.findByText("first:on")
@@ -89,6 +83,5 @@ describe("View", () => {
         await screen.findByText("updated:off")
 
         view.unmount()
-        await dispose()
     })
 })

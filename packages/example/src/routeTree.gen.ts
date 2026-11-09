@@ -15,6 +15,9 @@ import { Route as BlankRouteImport } from './routes/blank'
 import { Route as FormRouteImport } from './routes/form'
 import { Route as LensformRouteImport } from './routes/lensform'
 import { Route as QueryRouteImport } from './routes/query'
+import { Route as UserRouteImport } from './routes/user'
+import { Route as UserIndexRouteImport } from './routes/user.index'
+import { Route as UserEditRouteImport } from './routes/user.edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +49,21 @@ const QueryRoute = QueryRouteImport.update({
   path: '/query',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UserRoute = UserRouteImport.update({
+  id: '/user',
+  path: '/user',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UserIndexRoute = UserIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => UserRoute,
+} as any)
+const UserEditRoute = UserEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => UserRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +72,9 @@ export interface FileRoutesByFullPath {
   '/form': typeof FormRoute
   '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
+  '/user': typeof UserRouteWithChildren
+  '/user/edit': typeof UserEditRoute
+  '/user/': typeof UserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +83,8 @@ export interface FileRoutesByTo {
   '/form': typeof FormRoute
   '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
+  '/user/edit': typeof UserEditRoute
+  '/user': typeof UserIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,13 +94,43 @@ export interface FileRoutesById {
   '/form': typeof FormRoute
   '/lensform': typeof LensformRoute
   '/query': typeof QueryRoute
+  '/user': typeof UserRouteWithChildren
+  '/user/edit': typeof UserEditRoute
+  '/user/': typeof UserIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
+  fullPaths:
+    | '/'
+    | '/async'
+    | '/blank'
+    | '/form'
+    | '/lensform'
+    | '/query'
+    | '/user'
+    | '/user/edit'
+    | '/user/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
-  id: '__root__' | '/' | '/async' | '/blank' | '/form' | '/lensform' | '/query'
+  to:
+    | '/'
+    | '/async'
+    | '/blank'
+    | '/form'
+    | '/lensform'
+    | '/query'
+    | '/user/edit'
+    | '/user'
+  id:
+    | '__root__'
+    | '/'
+    | '/async'
+    | '/blank'
+    | '/form'
+    | '/lensform'
+    | '/query'
+    | '/user'
+    | '/user/edit'
+    | '/user/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -87,6 +140,7 @@ export interface RootRouteChildren {
   FormRoute: typeof FormRoute
   LensformRoute: typeof LensformRoute
   QueryRoute: typeof QueryRoute
+  UserRoute: typeof UserRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -133,8 +187,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QueryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/user': {
+      id: '/user'
+      path: '/user'
+      fullPath: '/user'
+      preLoaderRoute: typeof UserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/user/': {
+      id: '/user/'
+      path: '/'
+      fullPath: '/user/'
+      preLoaderRoute: typeof UserIndexRouteImport
+      parentRoute: typeof UserRoute
+    }
+    '/user/edit': {
+      id: '/user/edit'
+      path: '/edit'
+      fullPath: '/user/edit'
+      preLoaderRoute: typeof UserEditRouteImport
+      parentRoute: typeof UserRoute
+    }
   }
 }
+
+interface UserRouteChildren {
+  UserEditRoute: typeof UserEditRoute
+  UserIndexRoute: typeof UserIndexRoute
+}
+
+const UserRouteChildren: UserRouteChildren = {
+  UserEditRoute: UserEditRoute,
+  UserIndexRoute: UserIndexRoute,
+}
+
+const UserRouteWithChildren = UserRoute._addFileChildren(UserRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -143,6 +230,7 @@ const rootRouteChildren: RootRouteChildren = {
   FormRoute: FormRoute,
   LensformRoute: LensformRoute,
   QueryRoute: QueryRoute,
+  UserRoute: UserRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

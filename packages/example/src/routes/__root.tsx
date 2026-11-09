@@ -21,6 +21,7 @@ function Root() {
                     <Link to="/query">Query</Link>
                     <Link to="/form">Form</Link>
                     <Link to="/lensform">LensForm</Link>
+                    <Link to="/user">User</Link>
                 </Flex>
             </Container>
 

@@ -1,7 +1,7 @@
 {
   "name": "effect-view",
   "description": "Write React function components with Effect",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "files": [
     "./README.md",
@@ -109,6 +109,7 @@
     "lint:tsc": "tsc -b --noEmit",
     "lint:biome": "biome lint",
     "test": "vitest run",
+    "bench": "vitest bench --run",
     "build": "tsc -b tsconfig.build.json",
     "pack": "npm pack",
     "clean:cache": "rm -rf .turbo *.tsbuildinfo",

@@ -1,7 +1,8 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Equivalence, Exit, Function, identity, Layer, Pipeable, Predicate, References, Scheduler, Scope, Tracer } from "effect"
+import { Context, type Duration, Effect, Equivalence, Exit, Function, identity, Layer, Option, Pipeable, Predicate, References, Scheduler, Scope, Tracer } from "effect"
 import * as React from "react"
+import * as Refreshable from "./Refreshable.js"
 import * as ScopeRegistry from "./ScopeRegistry.js"
 
 
@@ -21,7 +22,7 @@ extends ComponentPrototype<R, F>, ComponentOptions {
     readonly "~Context": R
     readonly "~Function": F
 
-    readonly body: (props: P) => Effect.Effect<A, E, R>
+    readonly body: (props: P) => Effect.Effect<A, E, R | Scope.Scope>
 }
 
 export declare namespace Component {
@@ -49,10 +50,10 @@ export declare namespace ComponentImpl {
 }
 
 export interface ComponentImplPrototype<R, F extends Component.Signature> {
-    readonly use: Effect.Effect<F, never, Exclude<R, Scope.Scope>>
+    readonly use: Effect.Effect<F, never, R>
 
-    asFunctionComponent(contextRef: React.Ref<Context.Context<Exclude<R, Scope.Scope>>>): F
-    makeFunctionComponent(contextRef: React.Ref<Context.Context<Exclude<R, Scope.Scope>>>): F
+    asFunctionComponent(contextRef: React.Ref<Context.Context<R>>): F
+    makeFunctionComponent(contextRef: React.Ref<Context.Context<R>>): F
     setFunctionComponentName(f: F): void
     transformFunctionComponent(f: F): F
 }
@@ -62,19 +63,20 @@ export const ComponentImplPrototype: ComponentImplPrototype<any, any> = Object.f
 
     makeFunctionComponent<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
         this: ComponentImpl<P, A, E, R, F>,
-        contextRef: React.RefObject<Context.Context<Exclude<R, Scope.Scope>>>,
+        contextRef: React.RefObject<Context.Context<R>>,
     ) {
-        return (props: P) => Effect.runSyncWith(contextRef.current)(
-            Effect.flatMap(
-                useScope([], this),
-                scope => Effect.provideService(this.body(props), Scope.Scope, scope),
+        return (props: P) => Effect.runSyncWith(
+            Context.add(
+                contextRef.current,
+                Scope.Scope,
+                useScopeWith(contextRef, [], this),
             )
-        )
+        )(this.body(props))
     },
 
     asFunctionComponent<P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
         this: ComponentImpl<P, A, E, R, F>,
-        contextRef: React.RefObject<Context.Context<Exclude<R, Scope.Scope>>>,
+        contextRef: React.RefObject<Context.Context<R>>,
     ) {
         return this.makeFunctionComponent(contextRef)
     },
@@ -89,19 +91,41 @@ export const ComponentImplPrototype: ComponentImplPrototype<any, any> = Object.f
     transformFunctionComponent: identity,
 } as const)
 
-const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+const use = <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
     self: ComponentImpl<P, A, E, R, F>
-) {
-    // biome-ignore lint/style/noNonNullAssertion: React ref initialization
-    const contextRef = React.useRef<Context.Context<Exclude<R, Scope.Scope>>>(null!)
-    contextRef.current = yield* Effect.context<Exclude<R, Scope.Scope>>()
+): Effect.Effect<F, never, R> => Effect.map(
+    Effect.context<R>(),
+    context => {
+        // biome-ignore lint/style/noNonNullAssertion: React ref initialization
+        const contextRef = React.useRef<Context.Context<R>>(null!)
+        contextRef.current = context
 
+        return useFunctionComponent(self, contextRef)
+    },
+)
+
+const useFunctionComponent = <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
+    self: ComponentImpl<P, A, E, R, F>,
+    contextRef: React.RefObject<Context.Context<R>>,
+): F => {
     const componentRef = React.useRef<F | null>(null)
     const previousServicesRef = React.useRef<readonly any[] | null>(null)
 
     const services = Array.from(
         Context.omit(...self.nonReactiveTags)(contextRef.current).mapUnsafe.values()
     )
+
+    // Development only: a descriptor connected to a refresh cell. When the hooks of its body change, the function
+    // component is built again, which makes React mount it again with fresh state.
+    const cell = (self as Partial<Refreshable.Refreshable>)[Refreshable.RefreshableTypeId]
+    if (cell) {
+        // biome-ignore lint/correctness/useHookAtTopLevel: a descriptor either has a cell or not for its whole life
+        services.push(React.useSyncExternalStore(
+            cell.subscribe,
+            () => cell.getSnapshot().resetRevision,
+            () => cell.getSnapshot().resetRevision,
+        ))
+    }
 
     if (
         !componentRef.current ||
@@ -116,13 +140,13 @@ const use = Effect.fnUntraced(function* <P extends {}, A extends React.ReactNode
     }
 
     return componentRef.current
-})
+}
 
 
 export interface ComponentPrototype<R, F extends Component.Signature>
 extends Pipeable.Pipeable {
     readonly [ComponentTypeId]: ComponentTypeId
-    readonly use: Effect.Effect<F, never, Exclude<R, Scope.Scope>>
+    readonly use: Effect.Effect<F, never, R>
 }
 
 export const ComponentPrototype: ComponentPrototype<any, any> = Object.freeze(
@@ -197,7 +221,7 @@ export declare namespace make {
         ): Component.Default<
             P, A,
             [Eff] extends [never] ? never : [Eff] extends [Effect.Effect<infer _A, infer E, infer _R>] ? E : never,
-            [Eff] extends [never] ? never : [Eff] extends [Effect.Effect<infer _A, infer _E, infer R>] ? R : never
+            [Eff] extends [never] ? never : [Eff] extends [Effect.Effect<infer _A, infer _E, infer R>] ? Exclude<R, Scope.Scope> : never
         >
         <Eff extends Effect.Effect<any, any, any>, A, B extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
@@ -209,7 +233,7 @@ export declare namespace make {
                 >,
                 props: NoInfer<P>,
             ) => B,
-        ): Component.Default<P, Effect.Success<B>, Effect.Error<B>, Effect.Services<B>>
+        ): Component.Default<P, Effect.Success<B>, Effect.Error<B>, Exclude<Effect.Services<B>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -221,7 +245,7 @@ export declare namespace make {
                 props: NoInfer<P>,
             ) => B,
             b: (_: B, props: NoInfer<P>) => C,
-        ): Component.Default<P, Effect.Success<C>, Effect.Error<C>, Effect.Services<C>>
+        ): Component.Default<P, Effect.Success<C>, Effect.Error<C>, Exclude<Effect.Services<C>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -234,7 +258,7 @@ export declare namespace make {
             ) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
-        ): Component.Default<P, Effect.Success<D>, Effect.Error<D>, Effect.Services<D>>
+        ): Component.Default<P, Effect.Success<D>, Effect.Error<D>, Exclude<Effect.Services<D>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -248,7 +272,7 @@ export declare namespace make {
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
-        ): Component.Default<P, Effect.Success<E>, Effect.Error<E>, Effect.Services<E>>
+        ): Component.Default<P, Effect.Success<E>, Effect.Error<E>, Exclude<Effect.Services<E>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E, F extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -263,7 +287,7 @@ export declare namespace make {
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
-        ): Component.Default<P, Effect.Success<F>, Effect.Error<F>, Effect.Services<F>>
+        ): Component.Default<P, Effect.Success<F>, Effect.Error<F>, Exclude<Effect.Services<F>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E, F, G extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -279,7 +303,7 @@ export declare namespace make {
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
-        ): Component.Default<P, Effect.Success<G>, Effect.Error<G>, Effect.Services<G>>
+        ): Component.Default<P, Effect.Success<G>, Effect.Error<G>, Exclude<Effect.Services<G>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E, F, G, H extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -296,7 +320,7 @@ export declare namespace make {
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
-        ): Component.Default<P, Effect.Success<H>, Effect.Error<H>, Effect.Services<H>>
+        ): Component.Default<P, Effect.Success<H>, Effect.Error<H>, Exclude<Effect.Services<H>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E, F, G, H, I extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -314,7 +338,7 @@ export declare namespace make {
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
-        ): Component.Default<P, Effect.Success<I>, Effect.Error<I>, Effect.Services<I>>
+        ): Component.Default<P, Effect.Success<I>, Effect.Error<I>, Exclude<Effect.Services<I>, Scope.Scope>>
         <Eff extends Effect.Effect<any, any, any>, A, B, C, D, E, F, G, H, I, J extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Generator<Eff, A, never>,
             a: (
@@ -333,35 +357,35 @@ export declare namespace make {
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
             i: (_: I, props: NoInfer<P>) => J,
-        ): Component.Default<P, Effect.Success<J>, Effect.Error<J>, Effect.Services<J>>
+        ): Component.Default<P, Effect.Success<J>, Effect.Error<J>, Exclude<Effect.Services<J>, Scope.Scope>>
     }
 
     export type NonGen = {
         <Eff extends Effect.Effect<React.ReactNode, any, any>, P extends {} = {}>(
             body: (props: P) => Eff
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
             b: (_: B, props: NoInfer<P>) => C,
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -369,7 +393,7 @@ export declare namespace make {
             c: (_: C, props: NoInfer<P>) => D,
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -378,7 +402,7 @@ export declare namespace make {
             d: (_: D, props: NoInfer<P>) => E,
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -388,7 +412,7 @@ export declare namespace make {
             e: (_: E, props: NoInfer<P>) => F,
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, H, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -399,7 +423,7 @@ export declare namespace make {
             f: (_: F, props: NoInfer<P>) => G,
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
         <Eff extends Effect.Effect<React.ReactNode, any, any>, A, B, C, D, E, F, G, H, I, P extends {} = {}>(
             body: (props: P) => A,
             a: (_: A, props: NoInfer<P>) => B,
@@ -411,7 +435,7 @@ export declare namespace make {
             g: (_: G, props: NoInfer<P>) => H,
             h: (_: H, props: NoInfer<P>) => I,
             i: (_: I, props: NoInfer<P>) => Eff,
-        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Effect.Services<Eff>>
+        ): Component.Default<P, Effect.Success<Eff>, Effect.Error<Eff>, Exclude<Effect.Services<Eff>, Scope.Scope>>
     }
 }
 
@@ -698,17 +722,28 @@ export const provide: {
 export const withContext: {
     <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
         context: React.Context<Context.Context<R>>,
-    ): (self: Component<P, A, E, Scope.Scope | NoInfer<R>, F>) => F
+    ): (self: Component<P, A, E, NoInfer<R>, F>) => F
     <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
-        self: Component<P, A, E, Scope.Scope | NoInfer<R>, F>,
+        self: Component<P, A, E, NoInfer<R>, F>,
         context: React.Context<Context.Context<R>>,
     ): F
 } = Function.dual(2, <P extends {}, A extends React.ReactNode, E, R, F extends Component.Signature>(
     self: Component<P, A, E, R, F>,
     context: React.Context<Context.Context<R>>,
 ) => function WithContext(props: P) {
+    const currentContext = React.useContext(context)
+    if (currentContext == null)
+        throw new Error(
+            "Component.withContext: the context of this component has no Provider above it. " +
+            "Render the ReactRuntime.Provider of its runtime above this component."
+        )
+
+    // biome-ignore lint/style/noNonNullAssertion: React ref initialization
+    const contextRef = React.useRef<Context.Context<R>>(null!)
+    contextRef.current = currentContext
+
     return React.createElement(
-        Effect.runSyncWith(React.useContext(context))(self.use),
+        useFunctionComponent(self as ComponentImpl<P, A, E, R, F>, contextRef),
         props,
     )
 })
@@ -739,37 +774,65 @@ export declare namespace useScope {
  *
  * @returns An Effect that produces a `Scope` for resource management
 */
-export const useScope = Effect.fnUntraced(function*(
+export const useScope = (
     deps: React.DependencyList,
     options?: useScope.Options,
-): Effect.fn.Return<Scope.Scope> {
-    // biome-ignore lint/style/noNonNullAssertion: context initialization
-    const contextRef = React.useRef<Context.Context<never>>(null!)
-    contextRef.current = yield* Effect.context()
-    const registry = yield* ScopeRegistry.ScopeRegistry as unknown as Effect.Effect<ScopeRegistry.ScopeRegistryService>
+): Effect.Effect<Scope.Scope> => Effect.map(
+    Effect.context<never>(),
+    context => {
+        // biome-ignore lint/correctness/useHookAtTopLevel: the Effect runs while the component renders
+        // biome-ignore lint/style/noNonNullAssertion: context initialization
+        const contextRef = React.useRef<Context.Context<never>>(null!)
+        contextRef.current = context
 
-    const [key, scope] = React.useMemo(() => Effect.runSyncWith(contextRef.current)(Effect.gen(function*() {
+        // biome-ignore lint/correctness/useHookAtTopLevel: the Effect runs while the component renders
+        return useScopeWith(contextRef, deps, options)
+    },
+)
+
+export const useScopeWith = (
+    contextRef: React.RefObject<Context.Context<never>>,
+    deps: React.DependencyList,
+    options?: useScope.Options,
+): Scope.Scope => {
+    const registry = Context.get(contextRef.current as Context.Context<ScopeRegistry.ScopeRegistry>, ScopeRegistry.ScopeRegistry)
+
+    // Changes when the scope has to be replaced: whatever is computed from the scope is computed again.
+    // biome-ignore lint/correctness/useHookAtTopLevel: called unconditionally by every caller
+    const [generation, renew] = React.useReducer((count: number) => count + 1, 0)
+
+    // biome-ignore lint/correctness/useHookAtTopLevel: called unconditionally by every caller
+    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
+    const [key, scope] = React.useMemo(() => {
         const key = ScopeRegistry.makeKey()
-        const entry = yield* registry.register(key, {
+        const entry = Effect.runSyncWith(contextRef.current)(registry.register(key, {
             finalizerExecutionStrategy: options?.finalizerExecutionStrategy ?? defaultOptions.finalizerExecutionStrategy,
             finalizerExecutionDebounce: options?.finalizerExecutionDebounce ?? defaultOptions.finalizerExecutionDebounce,
             scopeCommitTimeout: options?.scopeCommitTimeout ?? defaultOptions.scopeCommitTimeout,
-        })
+        }))
 
-        return [key, entry.scope]
-    // biome-ignore lint/correctness/useExhaustiveDependencies: use of React.DependencyList
-    })), deps)
+        return [key, entry.scope] as const
+    }, [...deps, generation])
 
+    // biome-ignore lint/correctness/useHookAtTopLevel: called unconditionally by every caller
     // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "key"
     React.useEffect(() => {
-        Effect.runSyncWith(contextRef.current)(registry.commit(key))
+        // The effect runs again when a hidden `React.Activity` is shown. If the scope was closed meanwhile, it can't
+        // be committed any more, and whatever was created in it is gone: replace it by a new one.
+        if (Option.isNone(
+            Effect.runSyncWith(contextRef.current)(
+                Effect.option(registry.commit(key))
+            )
+        ))
+            return renew()
+
         return () => {
             Effect.runSyncWith(contextRef.current)(registry.release(key))
         }
     }, [key])
 
     return scope
-})
+}
 
 /**
  * Effect hook that executes an Effect once when the component mounts and caches the result.
@@ -794,7 +857,10 @@ export const useOnMount = Effect.fnUntraced(function* <A, E, R>(
     f: () => Effect.Effect<A, E, R>
 ): Effect.fn.Return<A, E, R> {
     const context = yield* Effect.context<R>()
-    return yield* React.useState(() => Effect.runSyncWith(context)(Effect.cached(f())))[0]
+    const scope = Context.getOrUndefined(context, Scope.Scope)
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "scope"
+    return yield* React.useMemo(() => Effect.runSyncWith(context)(Effect.cached(f())), [scope])
 })
 
 export declare namespace useOnChange {
@@ -836,10 +902,14 @@ export const useOnChange = Effect.fnUntraced(function* <A, E, R>(
     options?: useOnChange.Options,
 ): Effect.fn.Return<A, E, Exclude<R, Scope.Scope>> {
     const context = yield* Effect.context<Exclude<R, Scope.Scope>>()
-    const scope = yield* useScope(deps, options)
+    // biome-ignore lint/style/noNonNullAssertion: context initialization
+    const contextRef = React.useRef<Context.Context<never>>(null!)
+    contextRef.current = context
+
+    const scope = useScopeWith(contextRef, deps, options)
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: only reactive on "scope"
-    return yield* React.useMemo(() => Effect.runSyncWith(context)(
+    return yield* React.useMemo(() => Effect.runSyncWith(contextRef.current)(
         Effect.cached(Effect.provideService(f(), Scope.Scope, scope))
     ), [scope])
 })

@@ -7,4 +7,7 @@ export default defineConfig({
         include: ["./src/**/*.test.ts?(x)"],
         setupFiles: ["./src/setup-tests.ts"],
     },
+    benchmark: {
+        include: ["./src/**/*.bench.ts?(x)"],
+    },
 })
