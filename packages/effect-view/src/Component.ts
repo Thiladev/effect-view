@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: {} is the default type for React props */
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { Context, type Duration, Effect, Equivalence, Exit, Function, identity, Layer, Option, Pipeable, Predicate, References, Scheduler, Scope, Tracer } from "effect"
+import { Context, type Duration, Effect, Exit, Function, identity, Layer, Option, Pipeable, Predicate, References, Scheduler, Scope, Tracer } from "effect"
 import * as React from "react"
 import * as Refreshable from "./Refreshable.js"
 import * as ScopeRegistry from "./ScopeRegistry.js"
@@ -109,37 +109,81 @@ const useFunctionComponent = <P extends {}, A extends React.ReactNode, E, R, F e
     contextRef: React.RefObject<Context.Context<R>>,
 ): F => {
     const componentRef = React.useRef<F | null>(null)
-    const previousServicesRef = React.useRef<readonly any[] | null>(null)
+    const previousRevisionRef = React.useRef<number | undefined>(undefined)
 
-    const services = Array.from(
-        Context.omit(...self.nonReactiveTags)(contextRef.current).mapUnsafe.values()
-    )
+    const servicesChanged = useReactiveServicesChanged(contextRef.current, self.nonReactiveTags)
 
     // Development only: a descriptor connected to a refresh cell. When the hooks of its body change, the function
     // component is built again, which makes React mount it again with fresh state.
-    const cell = (self as Partial<Refreshable.Refreshable>)[Refreshable.RefreshableTypeId]
-    if (cell) {
+    const cell = Refreshable.isRefreshable(self)
+        ? self[Refreshable.RefreshableTypeId]
+        : null
+    const revision = cell
         // biome-ignore lint/correctness/useHookAtTopLevel: a descriptor either has a cell or not for its whole life
-        services.push(React.useSyncExternalStore(
+        ? React.useSyncExternalStore(
             cell.subscribe,
             () => cell.getSnapshot().resetRevision,
             () => cell.getSnapshot().resetRevision,
-        ))
-    }
+        )
+        : undefined
 
     if (
         !componentRef.current ||
-        !previousServicesRef.current ||
-        services.length !== previousServicesRef.current.length ||
-        !Equivalence.Array(Equivalence.strictEqual())(services, previousServicesRef.current)
+        servicesChanged ||
+        revision !== previousRevisionRef.current
     ) {
-        previousServicesRef.current = services
+        previousRevisionRef.current = revision
         const f = self.asFunctionComponent(contextRef)
         self.setFunctionComponentName(f)
         componentRef.current = self.transformFunctionComponent(f)
     }
 
     return componentRef.current
+}
+
+/**
+ * Whether a service of `context` outside `nonReactiveTags` changed since the last render where one did (always true on
+ * the first render). Compares in one pass, without copying the services.
+ */
+const useReactiveServicesChanged = (
+    context: Context.Context<any>,
+    nonReactiveTags: readonly Context.Key<any, any>[],
+): boolean => {
+    const previousRef = React.useRef<ReadonlyMap<string, unknown> | null>(null)
+    const nonReactiveKeys = React.useMemo(() => new Set(nonReactiveTags.map(tag => tag.key)), [nonReactiveTags])
+
+    const services = context.mapUnsafe
+    if (previousRef.current && reactiveServicesEqual(services, previousRef.current, nonReactiveKeys))
+        return false
+
+    previousRef.current = services
+    return true
+}
+
+const reactiveServicesEqual = (
+    self: ReadonlyMap<string, unknown>,
+    that: ReadonlyMap<string, unknown>,
+    nonReactiveKeys: ReadonlySet<string>,
+): boolean => {
+    if (self === that)
+        return true
+    if (reactiveSize(self, nonReactiveKeys) !== reactiveSize(that, nonReactiveKeys))
+        return false
+    for (const [key, value] of self) {
+        if (nonReactiveKeys.has(key))
+            continue
+        if (that.get(key) !== value || (value === undefined && !that.has(key)))
+            return false
+    }
+    return true
+}
+
+const reactiveSize = (services: ReadonlyMap<string, unknown>, nonReactiveKeys: ReadonlySet<string>): number => {
+    let size = services.size
+    for (const key of nonReactiveKeys)
+        if (services.has(key))
+            size--
+    return size
 }
 
 
@@ -440,19 +484,18 @@ export declare namespace make {
 }
 
 /**
- * Creates an Effect View Component using the same overloads and pipeline composition style as `Effect.fn`.
+ * Creates an Effect View Component without automatic distributed tracing.
  *
- * This is the **recommended** approach for defining Effect View components. It provides comprehensive
- * support for multiple component definition patterns:
+ * This function provides the same API surface as `makeTraced`, but does not create automatic tracing spans.
+ * It follows the exact same overload structure as `Effect.fnUntraced`.
  *
- * - **Generator syntax** (yield* style): Most ergonomic and readable approach for sequential operations
- * - **Direct Effect return**: For simple components that return an Effect directly
- * - **Chained transformation functions**: Enables Effect.fn-style pipelines for composable transformations
- * - **Automatic tracing**: Optional tracing span creation with automatic `displayName` assignment
+ * Use this variant when you need:
+ * - Full manual control over tracing instrumentation
+ * - To reduce tracing overhead in deeply nested component hierarchies
+ * - To avoid span noise in performance-sensitive applications
  *
- * When a `spanName` string is provided, the following occurs automatically:
- * 1. A distributed tracing span is created with the specified name
- * 2. The resulting React component receives `displayName = spanName` for DevTools visibility
+ * When a `spanName` string is provided, it is used **exclusively** as the React component's
+ * `displayName` for DevTools identification. No tracing span is created.
  *
  * @example
  * ```tsx
@@ -489,6 +532,73 @@ export declare namespace make {
 export const make: (
     & make.Gen
     & make.NonGen
+    & ((name: string) => make.Gen & make.NonGen)
+) = (nameOrBody: Function | string, ...pipeables: any[]): any => (
+    typeof nameOrBody !== "string"
+        ? Object.setPrototypeOf(
+            Object.assign(function() {}, defaultOptions, {
+                body: Effect.fnUntraced(nameOrBody as any, ...pipeables as []),
+            }),
+            ComponentPrototype,
+        )
+        : (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
+            Object.assign(function() {}, defaultOptions, {
+                body: Effect.fnUntraced(body, ...pipeables as []),
+                displayName: nameOrBody,
+            }),
+            ComponentPrototype,
+        )
+)
+
+/**
+ * Creates an Effect View Component using the same overloads and pipeline composition style as `Effect.fn`.
+ *
+ * It provides comprehensive support for multiple component definition patterns:
+ *
+ * - **Generator syntax** (yield* style): Most ergonomic and readable approach for sequential operations
+ * - **Direct Effect return**: For simple components that return an Effect directly
+ * - **Chained transformation functions**: Enables Effect.fn-style pipelines for composable transformations
+ * - **Automatic tracing**: Optional tracing span creation with automatic `displayName` assignment
+ *
+ * When a `spanName` string is provided, the following occurs automatically:
+ * 1. A distributed tracing span is created with the specified name
+ * 2. The resulting React component receives `displayName = spanName` for DevTools visibility
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = Component.makeTraced("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * })
+ * ```
+ *
+ * @example As an opaque type using class syntax
+ * ```tsx
+ * class MyComponent extends Component.makeTraced("MyComponent")(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Without name
+ * ```tsx
+ * class MyComponent extends Component.makeTraced(function* (props: { count: number }) {
+ *   const value = yield* someEffect
+ *   return <div>{value}</div>
+ * }) {}
+ * ```
+ *
+ * @example Using pipeline
+ * ```tsx
+ * class MyComponent extends Component.makeTraced("MyComponent")(
+ *   (props: { count: number }) => someEffect,
+ *   Effect.map(value => <div>{value}</div>),
+ * ) {}
+ * ```
+ */
+export const makeTraced: (
+    & make.Gen
+    & make.NonGen
     & ((
         spanName: string,
         spanOptions?: Tracer.SpanOptions,
@@ -513,73 +623,6 @@ export const make: (
         )
     }
 }
-
-/**
- * Creates an Effect View Component without automatic distributed tracing.
- *
- * This function provides the same API surface as `make`, but does not create automatic tracing spans.
- * It follows the exact same overload structure as `Effect.fnUntraced`.
- *
- * Use this variant when you need:
- * - Full manual control over tracing instrumentation
- * - To reduce tracing overhead in deeply nested component hierarchies
- * - To avoid span noise in performance-sensitive applications
- *
- * When a `spanName` string is provided, it is used **exclusively** as the React component's
- * `displayName` for DevTools identification. No tracing span is created.
- *
- * @example
- * ```tsx
- * const MyComponent = Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
- *   const value = yield* someEffect
- *   return <div>{value}</div>
- * })
- * ```
- *
- * @example As an opaque type using class syntax
- * ```tsx
- * class MyComponent extends Component.makeUntraced("MyComponent")(function* (props: { count: number }) {
- *   const value = yield* someEffect
- *   return <div>{value}</div>
- * }) {}
- * ```
- *
- * @example Without name
- * ```tsx
- * class MyComponent extends Component.makeUntraced(function* (props: { count: number }) {
- *   const value = yield* someEffect
- *   return <div>{value}</div>
- * }) {}
- * ```
- *
- * @example Using pipeline
- * ```tsx
- * class MyComponent extends Component.makeUntraced("MyComponent")(
- *   (props: { count: number }) => someEffect,
- *   Effect.map(value => <div>{value}</div>),
- * ) {}
- * ```
- */
-export const makeUntraced: (
-    & make.Gen
-    & make.NonGen
-    & ((name: string) => make.Gen & make.NonGen)
-) = (spanNameOrBody: Function | string, ...pipeables: any[]): any => (
-    typeof spanNameOrBody !== "string"
-        ? Object.setPrototypeOf(
-            Object.assign(function() {}, defaultOptions, {
-                body: Effect.fnUntraced(spanNameOrBody as any, ...pipeables as []),
-            }),
-            ComponentPrototype,
-        )
-        : (body: any, ...pipeables: any[]) => Object.setPrototypeOf(
-            Object.assign(function() {}, defaultOptions, {
-                body: Effect.fnUntraced(body, ...pipeables as []),
-                displayName: spanNameOrBody,
-            }),
-            ComponentPrototype,
-        )
-)
 
 export declare namespace withSignature {
     export type Result<T extends Component.Any, F extends Component.Signature> = (

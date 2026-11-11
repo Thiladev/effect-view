@@ -25,7 +25,7 @@ describe("Lens", () => {
         const ref = await Effect.runPromise(SubscriptionRef.make(0))
         const lens = Lens.fromSubscriptionRef(ref)
 
-        const Probe = Component.makeUntraced("LensUseStateProbe")(function*() {
+        const Probe = Component.make("LensUseStateProbe")(function*() {
             const [value, setValue] = yield* Lens.useState(lens)
 
             return (
@@ -61,7 +61,7 @@ describe("Lens", () => {
         const ref = await Effect.runPromise(SubscriptionRef.make({ id: 1, label: "first" }))
         const lens = Lens.fromSubscriptionRef(ref)
 
-        const Probe = Component.makeUntraced("LensUseStateEquivalenceProbe")(function*() {
+        const Probe = Component.make("LensUseStateEquivalenceProbe")(function*() {
             const [value] = yield* Lens.useState(lens, {
                 equivalence: (self, that) => self.id === that.id,
             })
@@ -93,7 +93,7 @@ describe("Lens", () => {
         const runtime = ReactRuntime.make(Layer.empty)
         let lens: Lens.Lens<string, never, never, never, never> | undefined
 
-        const Probe = Component.makeUntraced("LensUseFromReactStateProbe")(function*() {
+        const Probe = Component.make("LensUseFromReactStateProbe")(function*() {
             const [value, setValue] = React.useState("hello")
             const reactLens = yield* Lens.useFromReactState([value, setValue])
 
@@ -126,7 +126,7 @@ describe("Lens", () => {
         const runtime = ReactRuntime.make(Layer.empty)
         let lens: Lens.Lens<{ readonly id: number; readonly label: string }, never, never, never, never> | undefined
 
-        const Probe = Component.makeUntraced("LensUseFromReactStateEquivalenceProbe")(function*() {
+        const Probe = Component.make("LensUseFromReactStateEquivalenceProbe")(function*() {
             const [value, setValue] = React.useState({ id: 1, label: "first" })
             const reactLens = yield* Lens.useFromReactState([value, setValue], {
                 equivalence: (self, that) => self.id === that.id,

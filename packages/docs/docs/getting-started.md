@@ -123,8 +123,8 @@ boundary above `ReactRuntime.Provider` as well.
 ## Write your first component
 
 `Component.make` defines a component body using the same generator style as
-`Effect.gen` and `Effect.fn`. Providing a name creates a tracing span and also
-sets the React DevTools display name:
+`Effect.gen` and `Effect.fn`. Providing a name sets the React DevTools display
+name:
 
 ```tsx title="src/HelloView.tsx"
 import { Effect } from "effect"
@@ -139,8 +139,9 @@ export const HelloView = Component.make("HelloView")(
 )
 ```
 
-Use `Component.makeUntraced("HelloView")` when you want the display name but do
-not want an automatic tracing span.
+Use `Component.makeTraced("HelloView")` to also wrap the body in a tracing span,
+created on every render. It is mostly useful for async components, where the
+span measures how long the body waits.
 
 `HelloView` is an Effect View component description, not yet a normal React
 component. Convert it at the point where plain React, a router, or a third-party

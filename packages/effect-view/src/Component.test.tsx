@@ -35,7 +35,7 @@ describe("Component", () => {
         }))
         const runtime = ReactRuntime.make(Layer.succeed(ParentService, { prefix: "provided" }))
 
-        const Probe = Component.makeUntraced("ProvidedServiceProbe")(function*() {
+        const Probe = Component.make("ProvidedServiceProbe")(function*() {
             const service = yield* ValueService
             return <div>{service.value}</div>
         }).pipe(
@@ -69,7 +69,7 @@ describe("Component", () => {
         const onMount = vi.fn(() => Effect.succeed("mounted"))
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const Probe = Component.makeUntraced("UseOnMountProbe")(function*() {
+        const Probe = Component.make("UseOnMountProbe")(function*() {
             const value = yield* Component.useOnMount(onMount)
             return <div>{value}</div>
         }).pipe(
@@ -100,7 +100,7 @@ describe("Component", () => {
         const onChange = vi.fn((value: number) => Effect.succeed(`value:${value}`))
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const Probe = Component.makeUntraced("UseOnChangeProbe")(function*(props: { readonly value: number }) {
+        const Probe = Component.make("UseOnChangeProbe")(function*(props: { readonly value: number }) {
             const result = yield* Component.useOnChange(() => onChange(props.value), [props.value], {
                 finalizerExecutionDebounce: 0,
             })
@@ -144,7 +144,7 @@ describe("Component", () => {
         const cleanup = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const Probe = Component.makeUntraced("ScopeCleanupProbe")(function*(props: { readonly value: string }) {
+        const Probe = Component.make("ScopeCleanupProbe")(function*(props: { readonly value: string }) {
             const result = yield* Component.useOnChange(
                 () => Effect.gen(function*() {
                     yield* Effect.addFinalizer(() => Effect.sync(() => cleanup(props.value)))
@@ -188,7 +188,7 @@ describe("Component", () => {
         const lifecycle = vi.fn<(message: string) => void>()
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const Probe = Component.makeUntraced("UseReactEffectProbe")(function*(props: { readonly value: string }) {
+        const Probe = Component.make("UseReactEffectProbe")(function*(props: { readonly value: string }) {
             yield* Component.useReactEffect(() =>
                 Effect.gen(function*() {
                     yield* Effect.sync(() => lifecycle(`mount:${props.value}`))
@@ -237,7 +237,7 @@ describe("Component", () => {
         const runtime = ReactRuntime.make(Layer.empty)
         const seenCallbacks: Array<(value: number) => string> = []
 
-        const Probe = Component.makeUntraced("UseCallbackSyncProbe")(function*(props: { readonly prefix: string }) {
+        const Probe = Component.make("UseCallbackSyncProbe")(function*(props: { readonly prefix: string }) {
             const callback = yield* Component.useCallbackSync(
                 (value: number) => Effect.succeed(`${props.prefix}:${value}`),
                 [props.prefix],
@@ -294,7 +294,7 @@ describe("Component", () => {
         const cleanup = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const Probe = Component.makeUntraced("DebouncedCleanupProbe")(function*(props: { readonly value: string }) {
+        const Probe = Component.make("DebouncedCleanupProbe")(function*(props: { readonly value: string }) {
             const result = yield* Component.useOnChange(
                 () => Effect.gen(function*() {
                     yield* Effect.addFinalizer(() => Effect.sync(() => cleanup(props.value)))
@@ -348,7 +348,7 @@ describe("Component", () => {
         const unmounts = vi.fn()
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const SubComponent = Component.makeUntraced("NonReactiveSubComponent")(function*() {
+        const SubComponent = Component.make("NonReactiveSubComponent")(function*() {
             const service = yield* ValueService
             const [count, setCount] = React.useState(0)
 
@@ -364,7 +364,7 @@ describe("Component", () => {
             })
         )
 
-        const Parent = Component.makeUntraced("NonReactiveParent")(function*(props: { readonly value: string }) {
+        const Parent = Component.make("NonReactiveParent")(function*(props: { readonly value: string }) {
             const serviceLayer = React.useMemo(
                 () => Layer.succeed(ValueService, { value: props.value }),
                 [props.value],
@@ -415,7 +415,7 @@ describe("Component", () => {
         const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
         const pending = new Promise<void>(() => {})
 
-        const Probe = Component.makeUntraced("DiscardedSuspenseProbe")(function*() {
+        const Probe = Component.make("DiscardedSuspenseProbe")(function*() {
             yield* Component.useReactEffect(() => Effect.sync(setup), [])
             React.use(pending)
             return <div>committed</div>
@@ -454,7 +454,7 @@ describe("Component", () => {
         const effectRuntime = await managed.context()
         const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
 
-        const Probe = Component.makeUntraced("CommittedScopeProbe")(function*() {
+        const Probe = Component.make("CommittedScopeProbe")(function*() {
             yield* Component.useOnMount(() => Effect.gen(function*() {
                 yield* Effect.sync(acquisitions)
                 yield* Effect.addFinalizer(() => Effect.sync(releases))
@@ -534,7 +534,7 @@ describe("Component", () => {
             resolve = complete
         })
 
-        const Probe = Component.makeUntraced("RetriedSuspenseProbe")(function*() {
+        const Probe = Component.make("RetriedSuspenseProbe")(function*() {
             React.use(pending)
             yield* Component.useReactEffect(() => Effect.gen(function*() {
                 yield* Effect.sync(() => lifecycle("mount"))
@@ -580,7 +580,7 @@ describe("Component", () => {
     it("refreshes a registered body while preserving or resetting local state", async () => {
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const makeProbe = (label: string) => Component.makeUntraced("RefreshProbe")(function*() {
+        const makeProbe = (label: string) => Component.make("RefreshProbe")(function*() {
             const [count, setCount] = React.useState(0)
             return <button type="button" onClick={() => setCount(value => value + 1)}>{label}:{count}</button>
         })
@@ -616,7 +616,7 @@ describe("Component", () => {
     it("refreshes a component derived from a registered descriptor, which keeps its own traits", async () => {
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const makeBase = (label: string) => Component.makeUntraced("RefreshAsyncBase")(function*() {
+        const makeBase = (label: string) => Component.make("RefreshAsyncBase")(function*() {
             yield* Effect.sleep("5 millis")
             return <div>{label}</div>
         })
@@ -649,11 +649,11 @@ describe("Component", () => {
     it("refreshes a child used with .use, and remounts only the child when its hooks change", async () => {
         const runtime = ReactRuntime.make(Layer.empty)
 
-        const makeChild = (label: string) => Component.makeUntraced("RefreshChild")(function*() {
+        const makeChild = (label: string) => Component.make("RefreshChild")(function*() {
             const [count, setCount] = React.useState(0)
             return <button type="button" aria-label="child" onClick={() => setCount(value => value + 1)}>{label}:{count}</button>
         })
-        const makeChildWithMoreHooks = (label: string) => Component.makeUntraced("RefreshChild")(function*() {
+        const makeChildWithMoreHooks = (label: string) => Component.make("RefreshChild")(function*() {
             const [count, setCount] = React.useState(0)
             const [suffix] = React.useState("!")
             return <button type="button" aria-label="child" onClick={() => setCount(value => value + 1)}>{label}:{count}{suffix}</button>
@@ -662,7 +662,7 @@ describe("Component", () => {
         const cell = Refreshable.makeCell(child, "one hook", false)
         Refreshable.attach(child, cell)
 
-        const Parent = Component.makeUntraced("RefreshParent")(function*() {
+        const Parent = Component.make("RefreshParent")(function*() {
             const [count, setCount] = React.useState(0)
             const Child = yield* child.use
 
@@ -708,7 +708,7 @@ describe("Component", () => {
             const effectRuntime = await managed.context()
             const scopeRegistry = Context.get(effectRuntime, ScopeRegistry.ScopeRegistry)
 
-            const Probe = Component.makeUntraced("ActivityProbe")(function*() {
+            const Probe = Component.make("ActivityProbe")(function*() {
                 const [count, setCount] = React.useState(0)
                 const id = yield* Component.useOnMount(() => Effect.gen(function*() {
                     const id = ++acquired
@@ -790,7 +790,7 @@ describe("Component", () => {
             const managed = ManagedRuntime.make(ReactRuntime.preludeLayer)
             const effectRuntime = await managed.context()
 
-            const Probe = Component.makeUntraced("ActivityHookProbe")(function*() {
+            const Probe = Component.make("ActivityHookProbe")(function*() {
                 const [count, setCount] = React.useState(0)
                 const id = yield* Component.useOnChange(
                     () => Effect.gen(function*() {
@@ -850,7 +850,7 @@ describe("Component", () => {
                 return { value: `layer ${id}` }
             }))
 
-            const Probe = Component.makeUntraced("ActivityProvideProbe")(function*() {
+            const Probe = Component.make("ActivityProvideProbe")(function*() {
                 const service = yield* ValueService
                 const [count, setCount] = React.useState(0)
 

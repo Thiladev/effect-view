@@ -1,5 +1,29 @@
 # effect-view
 
+## 0.5.0
+
+### Minor Changes
+
+- [`8d419cc`](https://git.valverde.cloud/Thilawyn/effect-view/commit/8d419cc80ca796e17dce66e199506c369d48bacd) - **Breaking:** `Component.make` no longer wraps the body in a tracing span, `Component.makeUntraced` is removed, and `Component.makeTraced` is added.
+
+  A component body runs on every render, so a span per render (and the stack frame pushed with it) cost a few microseconds per component per render, even with no tracer exporting it. `make` now behaves like the former `makeUntraced`: a name only sets the `displayName`. `makeTraced` behaves like the former `make`, with the same overloads as `Effect.fn` and its span options. It is mostly useful for `Async` components, where the span measures how long the body waits.
+
+  ```ts
+  // Before
+  Component.make("PostView")(body)         // traced
+  Component.makeUntraced("PostView")(body) // untraced
+
+  // After
+  Component.makeTraced("PostView")(body)   // traced
+  Component.make("PostView")(body)         // untraced
+  ```
+
+  Replace `makeUntraced` with `make`, and `make` with `makeTraced` where the span is wanted.
+
+### Patch Changes
+
+- [`8d419cc`](https://git.valverde.cloud/Thilawyn/effect-view/commit/8d419cc80ca796e17dce66e199506c369d48bacd) - Make the check that decides whether a component used with `.use` must be mounted again (a service outside its `nonReactiveTags` changed) cheaper. It now compares the services in one pass, without copying the context or allocating on every render.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -14,8 +14,8 @@ export const HelloView = Component.make("HelloView")(function* (props: { readonl
 })
 ```
 
-- `Component.make(spanName?)(generatorBody, ...pipeArgs)` — same overloads as `Effect.fn`/`Effect.gen`: a generator body, or a body plus `(_, props) => next` pipeline steps. Passing a `spanName` wraps the body in a tracing span and sets `displayName`.
-- `Component.makeUntraced` is identical but skips the automatic span (still sets `displayName` from the name argument).
+- `Component.make(name?)(generatorBody, ...pipeArgs)` — same overloads as `Effect.fnUntraced`/`Effect.gen`: a generator body, or a body plus `(_, props) => next` pipeline steps. Passing a `name` sets `displayName`. The body is not traced.
+- `Component.makeTraced(spanName?, spanOptions?)` is identical but wraps the body in a tracing span (same overloads as `Effect.fn`), created on every render. Use it where the duration means something, such as an `Async` component.
 - The component's props type, return type, error channel, and required services (`R`) are all inferred from the generator body.
 
 ## Cross into React

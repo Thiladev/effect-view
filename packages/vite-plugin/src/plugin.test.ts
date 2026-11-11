@@ -88,12 +88,12 @@ class PostView extends Component.make("PostView")(function*() {
 // @refresh reset
 import { Component as View } from "effect-view"
 
-const Probe = View.makeUntraced(function*() {
+const Probe = View.makeTraced(function*() {
     return null
 })
 `)
 
-        expect(result).toContain("__effectViewRefresh(View.makeUntraced")
+        expect(result).toContain("__effectViewRefresh(View.makeTraced")
         expect(result).toMatch(/"src\/View\.tsx:Probe", "[a-z0-9]+", true/)
     })
 
@@ -112,7 +112,7 @@ export function View() {
 
         await runTransform(plugin, `
 import { Component } from "effect-view"
-export const Probe = Component.makeUntraced(function*() {
+export const Probe = Component.make(function*() {
     return null
 })
 `, id)
@@ -128,7 +128,7 @@ export const value = 1
     it("ignores the legacy effect-fc package", async () => {
         expect(await transform(`
 import { Component } from "effect-fc"
-export const Legacy = Component.makeUntraced(function*() {
+export const Legacy = Component.make(function*() {
     return null
 })
 `)).toBeUndefined()

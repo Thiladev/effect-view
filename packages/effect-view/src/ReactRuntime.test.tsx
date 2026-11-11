@@ -19,7 +19,7 @@ describe("ReactRuntime", () => {
             return { value: "built" }
         })))
 
-        const Probe = Component.makeUntraced("Probe")(function*() {
+        const Probe = Component.make("Probe")(function*() {
             return <div>{(yield* ValueService).value}</div>
         }).pipe(Component.withContext(runtime.context))
 
@@ -78,7 +78,7 @@ describe("ReactRuntime.extend", () => {
             return { id: `${ root.name }:user` }
         })))
 
-        const Edit = Component.makeUntraced("Edit")(function*() {
+        const Edit = Component.make("Edit")(function*() {
             const root = yield* RootService
             const user = yield* UserService
             return <div>{root.name} {user.id}</div>
@@ -110,7 +110,7 @@ describe("ReactRuntime.extend", () => {
         const userCleanup = vi.fn()
         const { runtime, UserRuntime, Edit } = makeRuntimes({ rootSetup, userSetup, userCleanup })
 
-        const Layout = Component.makeUntraced("Layout")(function*(props: { readonly shown: boolean }) {
+        const Layout = Component.make("Layout")(function*(props: { readonly shown: boolean }) {
             yield* RootService // the layout itself only needs the root context
             return props.shown
                 ? <ReactRuntime.Provider runtime={UserRuntime}><Edit /></ReactRuntime.Provider>
@@ -143,7 +143,7 @@ describe("ReactRuntime.extend", () => {
             return { title: `draft of ${ (yield* UserService).id }` }
         })))
 
-        const Probe = Component.makeUntraced("Probe")(function*() {
+        const Probe = Component.make("Probe")(function*() {
             return <div>{(yield* DraftService).title}</div>
         }).pipe(Component.withContext(DraftRuntime.context))
 
@@ -178,7 +178,7 @@ describe("ReactRuntime.extend", () => {
 
     it("only accepts components and layers whose requirements are provided", () => {
         const { runtime, UserRuntime } = makeRuntimes()
-        const NeedsUser = Component.makeUntraced(function*() { return <div>{(yield* UserService).id}</div> })
+        const NeedsUser = Component.make(function*() { return <div>{(yield* UserService).id}</div> })
 
         // @ts-expect-error UserService is not provided by the root context
         Component.withContext(NeedsUser, runtime.context)

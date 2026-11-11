@@ -21,7 +21,7 @@ describe("View", () => {
         const count = Lens.fromSubscriptionRef(countRef)
         const label = Lens.fromSubscriptionRef(labelRef)
 
-        const Probe = Component.makeUntraced("ViewUseAllProbe")(function*() {
+        const Probe = Component.make("ViewUseAllProbe")(function*() {
             const [currentCount, currentLabel] = yield* View.useAll([count, label])
 
             return <div>{`${currentCount}:${currentLabel}`}</div>
@@ -53,7 +53,7 @@ describe("View", () => {
         const item = Lens.fromSubscriptionRef(itemRef)
         const flag = Lens.fromSubscriptionRef(flagRef)
 
-        const Probe = Component.makeUntraced("ViewUseAllEquivalenceProbe")(function*() {
+        const Probe = Component.make("ViewUseAllEquivalenceProbe")(function*() {
             const [currentItem, currentFlag] = yield* View.useAll([item, flag], {
                 equivalence: ([selfItem, selfFlag], [thatItem, thatFlag]) =>
                     selfItem.id === thatItem.id && selfFlag === thatFlag,

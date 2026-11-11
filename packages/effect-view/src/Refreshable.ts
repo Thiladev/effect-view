@@ -1,3 +1,4 @@
+import { Predicate } from "effect"
 import * as React from "react"
 import type * as Component from "./Component.js"
 
@@ -61,8 +62,8 @@ export interface Refreshable {
  * `Component.provide`, ...) is refreshable too: it runs the body of the cell.
  */
 export const isRefreshable = <A extends object>(
-    value: A,
-): value is A & Refreshable => Object.hasOwn(value, RefreshableTypeId)
+    u: A,
+): u is A & Refreshable => Predicate.hasProperty(u, RefreshableTypeId)
 
 /**
  * The body a descriptor was defined with, without the one that `attach` put in

@@ -39,7 +39,7 @@ const PlainItem = () => React.createElement(
     React.createElement(PlainInner, { promise: Promise.resolve(<i />) }),
 )
 
-const EffectItem = Component.makeUntraced("AsyncEffectItem")(function*() {
+const EffectItem = Component.make("AsyncEffectItem")(function*() {
     yield* Effect.void
     return <i />
 }).pipe(

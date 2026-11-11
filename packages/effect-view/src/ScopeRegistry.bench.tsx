@@ -62,7 +62,7 @@ afterAll(() => managed.dispose())
 
 const PlainItem = () => <i />
 
-const EffectItem = Component.makeUntraced("EffectItem")(function*() {
+const EffectItem = Component.make("EffectItem")(function*() {
     yield* Effect.void
     return <i />
 }).pipe(Component.withContext(runtime.context))
@@ -110,12 +110,12 @@ describe.each([500, 2_000])("react, in batches: mount and unmount %d components"
 })
 
 
-const UsedItem = Component.makeUntraced("UsedItem")(function*() {
+const UsedItem = Component.make("UsedItem")(function*() {
     yield* Effect.void
     return <i />
 })
 
-const EffectList = Component.makeUntraced("EffectList")(function*(props: { readonly count: number }) {
+const EffectList = Component.make("EffectList")(function*(props: { readonly count: number }) {
     const Item = yield* UsedItem.use
     return <div>{range(props.count).map(i => <Item key={i} />)}</div>
 }).pipe(Component.withContext(runtime.context))

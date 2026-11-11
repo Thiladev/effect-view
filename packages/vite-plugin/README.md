@@ -15,7 +15,7 @@ export default defineConfig({
 })
 ```
 
-The plugin recognizes `Component.make` and `Component.makeUntraced`
+The plugin recognizes `Component.make` and `Component.makeTraced`
 definitions imported from `effect-view`. The legacy `effect-fc` package is
 not supported. `effect-view` owns the bundler-neutral refresh cell protocol;
 this package is the Vite adapter that retains those cells in HMR data. The

@@ -42,6 +42,7 @@ const defaultExclude = /\/node_modules\//
 const runtimeImport = "@effect-view/vite-plugin/runtime"
 const refreshIdentifier = "__effectViewRefresh"
 const acceptIdentifier = "__effectViewAccept"
+const factoryNames: ReadonlySet<string> = new Set(["make", "makeTraced"])
 
 const isSupportedPackage = (source: string): boolean =>
     source === "effect-view"
@@ -78,7 +79,7 @@ const collectImports = (
 
         for (const element of clause.namedBindings.elements) {
             const importedName = element.propertyName?.text ?? element.name.text
-            if (source.endsWith("/Component") && (importedName === "make" || importedName === "makeUntraced"))
+            if (source.endsWith("/Component") && factoryNames.has(importedName))
                 directFactories.add(element.name.text)
             else if (!source.endsWith("/Component") && importedName === "Component")
                 componentNamespaces.add(element.name.text)
@@ -102,7 +103,7 @@ const isFactoryCallee = (
     if (!ts.isPropertyAccessExpression(expression))
         return false
 
-    if (expression.name.text !== "make" && expression.name.text !== "makeUntraced")
+    if (!factoryNames.has(expression.name.text))
         return false
 
     if (ts.isIdentifier(expression.expression))
