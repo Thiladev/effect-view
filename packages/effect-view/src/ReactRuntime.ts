@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: necessary for class prototypes */
-import { type Context, Effect, Layer, ManagedRuntime, Pipeable, Predicate } from "effect"
+import { Cause, type Context, Effect, Exit, Layer, ManagedRuntime, Pipeable, Predicate } from "effect"
 import * as React from "react"
 import * as Component from "./Component.js"
 import * as ScopeRegistry from "./ScopeRegistry.js"
@@ -16,13 +16,8 @@ export interface ReactRuntime<R, ER> extends ReactRuntimePrototype<R, ER> {
 export const isReactRuntime = (u: unknown): u is ReactRuntime<unknown, unknown> => Predicate.hasProperty(u, ReactRuntimeTypeId)
 
 export interface ReactRuntimeImpl<R, ER> extends ReactRuntime<R, ER> {
-    Provider(props: ReactRuntimeImpl.ProviderProps): React.ReactNode
-}
-
-export declare namespace ReactRuntimeImpl {
-    export interface ProviderProps extends React.SuspenseProps {
-        readonly children?: React.ReactNode
-    }
+    /** Creates the managed runtime of a provider. Only called while rendering a provider component. */
+    useManagedRuntime(): ManagedRuntime.ManagedRuntime<R, ER>
 }
 
 export interface ReactRuntimePrototype<R, ER> extends Pipeable.Pipeable {
@@ -81,23 +76,17 @@ export interface RootReactRuntime<R, ER>
 extends ReactRuntime<R, ER>, RootReactRuntimePrototype<R, ER> {}
 
 export interface RootReactRuntimeImpl<R, ER>
-extends RootReactRuntime<R, ER>, ReactRuntimeImpl<R, ER>, RootReactRuntimeImplPrototype {
+extends RootReactRuntime<R, ER>, ReactRuntimeImpl<R, ER>, RootReactRuntimeImplPrototype<R, ER> {
     readonly layer: Layer.Layer<R, ER>
 }
 
-export interface RootReactRuntimeImplPrototype {
-    Provider(props: ReactRuntimeImpl.ProviderProps): React.ReactNode
+export interface RootReactRuntimeImplPrototype<R, ER> {
+    useManagedRuntime(): ManagedRuntime.ManagedRuntime<R, ER>
 }
 
-export const RootReactRuntimeImplPrototype: RootReactRuntimeImplPrototype = Object.freeze({
-    Provider<R, ER>(
-        this: RootReactRuntimeImpl<R, ER>,
-        props: ReactRuntimeImpl.ProviderProps,
-    ): React.ReactNode {
-        // biome-ignore lint/correctness/useHookAtTopLevel: only called while rendering the Provider component
-        const [managedRuntime] = React.useState(() => ManagedRuntime.make(this.layer))
-        // biome-ignore lint/correctness/useHookAtTopLevel: only called while rendering the Provider component
-        return useProvider(this, managedRuntime, props)
+export const RootReactRuntimeImplPrototype: RootReactRuntimeImplPrototype<any, any> = Object.freeze({
+    useManagedRuntime<R, ER>(this: RootReactRuntimeImpl<R, ER>): ManagedRuntime.ManagedRuntime<R, ER> {
+        return React.useState(() => ManagedRuntime.make(this.layer))[0]
     },
 } as const)
 
@@ -128,21 +117,19 @@ export interface ExtendedReactRuntime<R1, R2, E1, E2>
 extends ReactRuntime<R1 | R2, E1 | E2>, ExtendedReactRuntimePrototype<R1, R2, E1, E2> {}
 
 export interface ExtendedReactRuntimeImpl<R1, R2, E1, E2>
-extends ExtendedReactRuntime<R1, R2, E1, E2>, ReactRuntimeImpl<R1 | R2, E1 | E2>, ExtendedReactRuntimeImplPrototype {
+extends ExtendedReactRuntime<R1, R2, E1, E2>, ReactRuntimeImpl<R1 | R2, E1 | E2>, ExtendedReactRuntimeImplPrototype<R1, R2, E1, E2> {
     readonly parent: ReactRuntime<R1, E1>
     readonly layer: Layer.Layer<R2, E2, R1>
 }
 
-export interface ExtendedReactRuntimeImplPrototype {
-    Provider(props: ReactRuntimeImpl.ProviderProps): React.ReactNode
+export interface ExtendedReactRuntimeImplPrototype<R1, R2, E1, E2> {
+    useManagedRuntime(): ManagedRuntime.ManagedRuntime<R1 | R2, E1 | E2>
 }
 
-export const ExtendedReactRuntimeImplPrototype: ExtendedReactRuntimeImplPrototype = Object.freeze({
-    Provider<R1, R2, E1, E2>(
+export const ExtendedReactRuntimeImplPrototype: ExtendedReactRuntimeImplPrototype<any, any, any, any> = Object.freeze({
+    useManagedRuntime<R1, R2, E1, E2>(
         this: ExtendedReactRuntimeImpl<R1, R2, E1, E2>,
-        props: ReactRuntimeImpl.ProviderProps,
-    ): React.ReactNode {
-        // biome-ignore lint/correctness/useHookAtTopLevel: only called while rendering the Provider component
+    ): ManagedRuntime.ManagedRuntime<R1 | R2, E1 | E2> {
         const parentContext = React.useContext(this.parent.context)
         if (parentContext == null)
             throw new Error(
@@ -150,12 +137,9 @@ export const ExtendedReactRuntimeImplPrototype: ExtendedReactRuntimeImplPrototyp
                 "Render the Provider of the parent above the Provider of the extended runtime."
             )
 
-        // biome-ignore lint/correctness/useHookAtTopLevel: only called while rendering the Provider component
-        const [managedRuntime] = React.useState(() => ManagedRuntime.make(
+        return React.useState(() => ManagedRuntime.make(
             Layer.provideMerge(this.layer, Layer.succeedContext(parentContext)),
-        ))
-        // biome-ignore lint/correctness/useHookAtTopLevel: only called while rendering the Provider component
-        return useProvider(this, managedRuntime, props)
+        ))[0]
     },
 } as const)
 
@@ -169,21 +153,71 @@ export const ExtendedReactRuntimePrototype: ExtendedReactRuntimePrototype<any, a
 )
 
 
-const useProvider = <R, ER>(
-    runtime: ReactRuntime<R, ER>,
-    managedRuntime: ManagedRuntime.ManagedRuntime<R, ER>,
-    { children, ...suspenseProps }: ReactRuntimeImpl.ProviderProps,
+export namespace Provider {
+    export interface Props<R, ER> {
+        readonly runtime: ReactRuntime<R, ER>
+        readonly children?: React.ReactNode
+    }
+}
+
+/**
+ * Builds the layer of the runtime synchronously while rendering, and provides the resulting context to its children.
+ *
+ * Throws if the layer does not complete synchronously (use `AsyncProvider` for that), or if it fails: put a React
+ * error boundary above the provider if the construction can fail.
+ */
+export const Provider = <R, ER>(
+    { runtime, children }: Provider.Props<R, ER>
 ): React.ReactNode => {
+    const managedRuntime = (runtime as ReactRuntimeImpl<R, ER>).useManagedRuntime()
+    const context = React.useMemo(() => {
+        const exit = Effect.runSyncExit(managedRuntime.contextEffect)
+        if (Exit.isSuccess(exit))
+            return exit.value
+
+        // Releases whatever the unfinished build has acquired, since nothing will ever mount to do it.
+        void managedRuntime.dispose()
+        const error = Cause.squash(exit.cause)
+        throw Cause.isAsyncFiberError(error)
+            ? new Error(
+                "ReactRuntime.Provider: the layer of the runtime did not complete synchronously. " +
+                "Use ReactRuntime.AsyncProvider to build a layer that is asynchronous."
+            )
+            : error
+    }, [managedRuntime])
+
+    useDispose(context, managedRuntime)
+    return React.createElement(runtime.context, { value: context }, children)
+}
+
+
+export namespace AsyncProvider {
+    export interface Props<R, ER> extends React.SuspenseProps {
+        readonly runtime: ReactRuntime<R, ER>
+        readonly children?: React.ReactNode
+    }
+}
+
+/**
+ * Builds the layer of the runtime asynchronously, suspending until it is ready, and provides the resulting context to
+ * its children. The `fallback` is displayed in the meantime.
+ *
+ * A failing layer goes to the nearest React error boundary above the provider.
+ */
+export const AsyncProvider = <R, ER>(
+    { runtime, children, ...suspenseProps }: AsyncProvider.Props<R, ER>
+): React.ReactNode => {
+    const managedRuntime = (runtime as ReactRuntimeImpl<R, ER>).useManagedRuntime()
     const promise = React.useMemo(() => managedRuntime.context(), [managedRuntime])
 
     return React.createElement(
         React.Suspense,
         suspenseProps,
-        React.createElement(ProviderInner<R, ER>, { runtime, managedRuntime, promise, children }),
+        React.createElement(AsyncProviderInner<R, ER>, { runtime, managedRuntime, promise, children }),
     )
 }
 
-const ProviderInner = <R, ER>(
+const AsyncProviderInner = <R, ER>(
     { runtime, managedRuntime, promise, children }: {
         readonly runtime: ReactRuntime<R, ER>
         readonly managedRuntime: ManagedRuntime.ManagedRuntime<R, ER>
@@ -192,23 +226,16 @@ const ProviderInner = <R, ER>(
     }
 ): React.ReactNode => {
     const context = React.use(promise)
-    Effect.runSyncWith(context)(Component.useOnChange(
-        // Detached: disposing the runtime disposes the ScopeRegistry, which waits for the scopes being closed, and the
-        // scope of this component is one of them.
-        () => Effect.addFinalizer(() => Effect.forkDetach(managedRuntime.disposeEffect)),
-        [managedRuntime],
-    ))
-
+    useDispose(context, managedRuntime)
     return React.createElement(runtime.context, { value: context }, children)
 }
 
-
-export namespace Provider {
-    export interface Props<R, ER> extends ReactRuntimeImpl.ProviderProps {
-        readonly runtime: ReactRuntime<R, ER>
-    }
-}
-
-export const Provider = <R, ER>(
-    { runtime, ...props }: Provider.Props<R, ER>
-): React.ReactNode => (runtime as ReactRuntimeImpl<R, ER>).Provider(props)
+const useDispose = <R, ER>(
+    context: Context.Context<R>,
+    managedRuntime: ManagedRuntime.ManagedRuntime<R, ER>,
+): void => Effect.runSyncWith(context)(Component.useOnChange(
+    // Detached: disposing the runtime disposes the ScopeRegistry, which waits for the scopes being closed, and the
+    // scope of this component is one of them.
+    () => Effect.addFinalizer(() => Effect.forkDetach(managedRuntime.disposeEffect)),
+    [managedRuntime],
+))

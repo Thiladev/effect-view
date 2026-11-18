@@ -9,7 +9,7 @@ import * as ReactRuntime from "./ReactRuntime.js"
 
 class ValueService extends Context.Service<ValueService, { readonly value: string }>()("ValueService") {}
 
-describe("ReactRuntime", () => {
+describe("ReactRuntime.AsyncProvider", () => {
     it("builds its layer for each mount of the provider and releases it on unmount", async () => {
         const setup = vi.fn()
         const cleanup = vi.fn()
@@ -27,9 +27,9 @@ describe("ReactRuntime", () => {
             let view!: ReturnType<typeof render>
             await act(async () => {
                 view = render(
-                    <ReactRuntime.Provider runtime={runtime} fallback={<p>starting</p>}>
+                    <ReactRuntime.AsyncProvider runtime={runtime} fallback={<p>starting</p>}>
                         <Probe />
-                    </ReactRuntime.Provider>
+                    </ReactRuntime.AsyncProvider>
                 )
             })
             return view
@@ -45,6 +45,45 @@ describe("ReactRuntime", () => {
         expect(setup).toHaveBeenCalledTimes(2)
         second.unmount()
         await waitFor(() => expect(cleanup).toHaveBeenCalledTimes(2))
+    })
+})
+
+describe("ReactRuntime.Provider", () => {
+    it("builds a synchronous layer during the first render and releases it on unmount", () => {
+        const setup = vi.fn()
+        const cleanup = vi.fn()
+        const runtime = ReactRuntime.make(Layer.effect(ValueService, Effect.gen(function*() {
+            setup()
+            yield* Effect.addFinalizer(() => Effect.sync(cleanup))
+            return { value: "built" }
+        })))
+        const Probe = Component.make("Probe")(function*() {
+            return <div>{(yield* ValueService).value}</div>
+        }).pipe(Component.withContext(runtime.context))
+
+        const view = render(<ReactRuntime.Provider runtime={runtime}><Probe /></ReactRuntime.Provider>)
+        expect(screen.getByText("built")).toBeTruthy()
+        expect(setup).toHaveBeenCalledTimes(1)
+        view.unmount()
+        return waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1))
+    })
+
+    it("throws a clear error when the layer is asynchronous", () => {
+        const runtime = ReactRuntime.make(Layer.effect(ValueService, Effect.promise(async () => ({ value: "slow" }))))
+        const error = vi.spyOn(console, "error").mockImplementation(() => {})
+
+        expect(() => render(<ReactRuntime.Provider runtime={runtime}><p>child</p></ReactRuntime.Provider>))
+            .toThrow(/AsyncProvider/)
+        error.mockRestore()
+    })
+
+    it("throws the error of a failing layer", () => {
+        const runtime = ReactRuntime.make(Layer.effect(ValueService, Effect.die(new Error("boom"))))
+        const error = vi.spyOn(console, "error").mockImplementation(() => {})
+
+        expect(() => render(<ReactRuntime.Provider runtime={runtime}><p>child</p></ReactRuntime.Provider>))
+            .toThrow(/boom/)
+        error.mockRestore()
     })
 })
 
