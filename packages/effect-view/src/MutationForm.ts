@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { Array, Cause, type Context, Effect, Fiber, Option, Pipeable, Predicate, Schema, SchemaIssue, type Scope, Semaphore, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import * as Form from "./Form.js"
+import * as FormBuffers from "./FormBuffers.js"
 import * as Lens from "./Lens.js"
 import * as Mutation from "./Mutation.js"
 import type * as QueryClient from "./QueryClient.js"
@@ -47,6 +48,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
     readonly isCommitting: View.View<boolean, never, never>
 
     constructor(
+        readonly buffers: FormBuffers.FormBuffers,
         readonly schema: Schema.ConstraintCodec<A, I, RD, RE>,
         readonly context: Context.Context<Scope.Scope | RD | RE>,
         readonly mutation: Mutation.Mutation<
@@ -133,10 +135,7 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
 
     get run(): Effect.Effect<void, never, never> {
         return Lens.get(this.encodedValue).pipe(
-            Effect.flatMap(v => Schema.decodeEffect(this.schema)(v)),
-            Effect.option,
-            Effect.flatMap(v => Lens.set(this.value, v)),
-            Effect.provide(this.context),
+            Effect.flatMap(encodedValue => this.synchronizeEncodedValue(encodedValue)),
             this.runSemaphore.withPermits(1),
         )
     }
@@ -149,7 +148,10 @@ extends Pipeable.Class implements MutationForm<A, I, RD, RE, MA, ME, MR> {
         Cause.NoSuchElementError,
         never
     > {
-        return Lens.get(this.value).pipe(
+        return this.buffers.flush().pipe(
+            Effect.andThen(Lens.get(this.encodedValue)),
+            Effect.flatMap(encodedValue => this.synchronizeEncodedValue(encodedValue)),
+            Effect.andThen(Lens.get(this.value)),
             Effect.flatMap(Effect.fromOption),
             Effect.flatMap(value => this.submitValue(value)),
         )
@@ -208,6 +210,7 @@ export const make = Effect.fnUntraced(function* <A, I = A, RD = never, RE = neve
     Scope.Scope | QueryClient.QueryClient | RD | RE | MR
 > {
     return new MutationFormImpl(
+        yield* FormBuffers.make,
         options.schema,
         yield* Effect.context<Scope.Scope | RD | RE | MR>(),
         yield* Mutation.make(options),

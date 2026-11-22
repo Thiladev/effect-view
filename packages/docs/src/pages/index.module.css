@@ -279,19 +279,23 @@
   justify-self: end;
 }
 
-.codeWindow :global(.theme-code-block) {
-  border: 0;
+.code {
+  background: var(--home-terminal-bg);
   border-radius: 0;
-  box-shadow: none;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  line-height: 1.62;
   margin: 0;
+  overflow-x: auto;
+  padding: 1.4rem 1.6rem;
 }
 
-.codeWindow :global(.theme-code-block pre.thin-scrollbar) {
-  background: var(--home-terminal-bg) !important;
-  font-size: 0.8rem !important;
-  line-height: 1.62 !important;
-  max-height: none;
-  padding: 1.4rem 1.6rem !important;
+.code code {
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: inherit;
+  padding: 0;
 }
 
 .codeLegend {
@@ -364,95 +368,114 @@
 .featureGrid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .featureCard {
   background: var(--home-card);
   border: 1px solid var(--home-line);
   border-radius: 0.75rem;
-  color: inherit;
   display: flex;
   flex-direction: column;
-  min-height: 300px;
-  padding: 1.4rem;
-  text-decoration: none !important;
-  transition:
-    border-color 160ms ease,
-    transform 160ms ease;
+  gap: 1.4rem;
+  min-width: 0;
+  padding: 1.6rem;
+  transition: border-color 160ms ease;
 }
 
 .featureCard:hover {
   border-color: var(--home-card-hover-line);
-  color: inherit;
-  transform: translateY(-3px);
 }
 
-.cardTopline {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
+/* A wide card puts the copy beside its code. */
+.featureCardWide {
+  column-gap: 2.5rem;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-areas:
+    ". code"
+    "copy code"
+    "link code"
+    ". code";
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-rows: 1fr auto auto 1fr;
+  row-gap: 1.4rem;
 }
 
-.featureIcon {
-  align-items: center;
-  background: rgba(5, 150, 105, 0.1);
-  border-radius: 0.4rem;
-  color: var(--home-emerald);
-  display: flex;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.95rem;
-  font-weight: 700;
-  height: 2.4rem;
-  justify-content: center;
-  width: 2.4rem;
+.featureCardWide .cardCopy {
+  grid-area: copy;
 }
 
-.cardIndex {
-  color: var(--home-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.72rem;
+.featureCardWide .cardCode {
+  grid-area: code;
 }
 
-.featureCard h3 {
+.featureCardWide .cardLink {
+  grid-area: link;
+  margin-top: 0;
+  justify-self: start;
+}
+
+.cardCopy h3 {
   color: var(--home-ink);
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  margin: 1.8rem 0 0.6rem;
+  margin: 0 0 0.7rem;
 }
 
-.featureCard > p {
+.cardCopy p {
   color: var(--home-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.92rem;
+  line-height: 1.65;
   margin: 0;
 }
 
-.cardFooter {
+/* Same dark terminal as the hero, in both color modes. */
+.cardCode {
+  min-width: 0;
+  background: var(--home-terminal-bg);
+  border: 1px solid var(--home-terminal-line);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.cardCodeBar {
+  border-bottom: 1px solid var(--home-terminal-line);
+  color: #a1a1aa;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  padding: 0.7rem 1.2rem;
+}
+
+.cardCode .code {
+  font-size: 0.76rem;
+  line-height: 1.6;
+  padding: 1rem 1.2rem;
+}
+
+.cardLink {
   align-items: center;
-  display: flex;
-  justify-content: space-between;
+  color: var(--home-emerald);
+  display: inline-flex;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: 0.4rem;
   margin-top: auto;
-  padding-top: 1.4rem;
+  text-decoration: none !important;
 }
 
-.cardFooter code {
-  background: rgba(5, 150, 105, 0.1);
-  border: 0;
-  color: var(--home-emerald);
-  font-size: 0.68rem;
-  padding: 0.32rem 0.5rem;
-}
-
-.cardFooter > span {
-  color: var(--home-emerald);
-  font-size: 1rem;
+.cardLink span {
   transition: transform 160ms ease;
 }
 
-.featureCard:hover .cardFooter > span {
-  transform: translate(2px, -2px);
+.cardLink:hover {
+  color: var(--home-emerald);
+}
+
+.cardLink:hover span {
+  transform: translateX(3px);
 }
 
 /* ---------- CTA ---------- */
@@ -554,8 +577,8 @@
     transform: none;
   }
 
-  .featureGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .featureCardWide {
+    display: flex;
   }
 
   .sectionHeading {
@@ -590,10 +613,13 @@
     grid-template-columns: 1fr;
   }
 
-  .codeWindow :global(.theme-code-block pre) {
+  .featureCard {
+    padding: 1.2rem;
+  }
+
+  .codeWindow .code {
     font-size: 0.72rem;
-    overflow-x: auto;
-    padding: 1.1rem !important;
+    padding: 1.1rem;
   }
 
   .windowStatus {
@@ -621,6 +647,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .featureCard,
+  .cardLink span,
   .primaryAction,
   .secondaryAction,
   .ctaAction,

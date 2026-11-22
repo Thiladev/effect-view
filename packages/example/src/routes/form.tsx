@@ -1,8 +1,8 @@
 import { Button, Container, Flex, Text } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Console, Effect, Schema } from "effect"
-import { Component, Form, MutationForm, View } from "effect-view"
-import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
+import { Component, Form, MutationForm } from "effect-view"
+import { TextFieldFormBufferedInputView } from "@/lib/form/TextFieldFormBufferedInputView"
 import { runtime } from "@/runtime"
 
 
@@ -40,12 +40,9 @@ const RegisterRouteComponent = Component.make("RegisterRouteView")(function*() {
         return [form, emailField, passwordField] as const
     }))
 
-    const [canCommit, isCommitting] = yield* View.useAll([
-        form.canCommit,
-        form.isCommitting,
-    ])
+    const { isCommitting } = yield* Form.useStatus(form)
 
-    const TextFieldFormInput = yield* TextFieldFormInputView.use
+    const TextFieldFormInput = yield* TextFieldFormBufferedInputView.use
     const runPromise = yield* Component.useRunPromise()
 
 
@@ -59,15 +56,13 @@ const RegisterRouteComponent = Component.make("RegisterRouteView")(function*() {
                     <TextFieldFormInput
                         form={emailField}
                         placeholder="Email"
-                        debounce="250 millis"
                     />
                     <TextFieldFormInput
                         form={passwordField}
                         placeholder="Password"
                         type="password"
-                        debounce="250 millis"
                     />
-                    <Button disabled={!canCommit || isCommitting}>
+                    <Button disabled={isCommitting}>
                         {isCommitting ? "Submitting…" : "Submit"}
                     </Button>
                 </Flex>

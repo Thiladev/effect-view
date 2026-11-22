@@ -44,12 +44,14 @@ const emailField = form.pipe(Form.focusObjectOn("contact"), Form.focusObjectOn("
 ## Bind a subform to an input
 
 ```tsx
-const input = yield* Form.useInput(emailField, { debounce: "250 millis" })
+const input = yield* Form.useLiveInput(emailField, { debounce: "250 millis" })
 <input value={input.value} onChange={e => input.setValue(e.currentTarget.value)} />
 ```
 
-- `Form.useInput(form, { debounce? })` returns `{ value, setValue }` from the subform's encoded value. `setValue` writes the form and re-runs the schema pipeline. `debounce` delays propagation to the form (the displayed value updates immediately) — useful for text inputs to avoid validating every keystroke.
-- `Form.useOptionalInput(form, { defaultValue, debounce? })` is for a field whose encoded value is `Option<I>`: returns `{ value, setValue, enabled, setEnabled }` for a togglable optional input. `value`/`setValue` operate on the unwrapped `I`; `defaultValue` is used as `value` while `enabled` is `false` (i.e. while the encoded field is `None`), and `defaultValue` is required.
+- `Form.useLiveInput(form, { debounce? })` returns `{ value, setValue }` from the subform's encoded value. `setValue` writes the form and re-runs the schema pipeline. `debounce` delays propagation to the form (the displayed value updates immediately) — useful for text inputs to avoid validating every keystroke. A value still waiting for its debounce is written when the form is submitted (`MutationForm.submit`).
+- `Form.useOptionalLiveInput(form, { defaultValue, debounce? })` is for a field whose encoded value is `Option<I>`: returns `{ value, setValue, enabled, setEnabled }` for a togglable optional input. `value`/`setValue` operate on the unwrapped `I`; `defaultValue` is used as `value` while `enabled` is `false` (i.e. while the encoded field is `None`), and `defaultValue` is required.
+- `Form.useBufferedInput(form)` and `Form.useOptionalBufferedInput(form, { defaultValue })` buffer the value instead of writing it on every change: it is held locally and written to the form, which validates it, when the returned `flush()` is called, so the form is not validated while the user is typing. Returns `{ value, setValue, flush }` (plus `enabled`/`setEnabled` for the optional hook). `flush` means "the user is done editing the input", not a DOM event, and returns a `Promise` that resolves once the value is written and validated: call it from whatever your renderer offers (in a DOM input, `onBlur`). Toggling `enabled` flushes right away. A value that is not flushed yet is also flushed when the form is submitted (`MutationForm.submit`), so pressing Enter in a field without leaving it submits what the user typed; an input that unmounts first drops it.
+- All four input hooks return `flush()` and `flushed`. `flushed` is local to the input, starts `false`, never reaches the form, and becomes `true` once the input has been flushed — by `flush()` or by `MutationForm.submit`, which flushes every mounted input. Use it to hold issues back until then. For the live hooks, `flush()` writes the pending value right away without waiting for the debounce.
 - `Form.useStatus(form, { debounce? })` returns `{ isValidating, isCommitting, canCommit }`, debounced (default 250ms) to avoid flicker in pending indicators.
 
 These hooks are building blocks for your own reusable input components — wrap them once to handle labels, issues, disabled state, and styling consistently; both hooks accept any `Form.Form`, so the same input component works with subforms from `MutationForm` or `LensForm`.

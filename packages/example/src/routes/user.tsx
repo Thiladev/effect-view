@@ -1,4 +1,4 @@
-import { Container, Flex, Text } from "@radix-ui/themes"
+import { Container, Flex } from "@radix-ui/themes"
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 import { ReactRuntime } from "effect-view"
 import { userRuntime } from "@/user"
@@ -8,7 +8,7 @@ import { userRuntime } from "@/user"
 // here makes its services available to the ones that read `userRuntime.context`.
 function UserLayout() {
     return (
-        <ReactRuntime.Provider runtime={userRuntime} fallback={<Text>Loading user...</Text>}>
+        <ReactRuntime.Provider runtime={userRuntime}>
             <Container width="480">
                 <Flex direction="column" gap="3">
                     <Flex gap="2">

@@ -4,6 +4,7 @@ import type * as Preset from "@docusaurus/preset-classic"
 import type { Config } from "@docusaurus/types"
 import { themes as prismThemes } from "prism-react-renderer"
 
+import changelogPlugin from "./src/plugins/changelog"
 import githubDark from "./src/prism/github-dark"
 import remarkLineNumbers from "./src/remark/line-numbers"
 
@@ -48,6 +49,10 @@ const config: Config = {
 
   plugins: [
     [
+      changelogPlugin,
+      { source: "../effect-view/CHANGELOG.md", out: "docs/changelog.md" },
+    ],
+    [
       "docusaurus-plugin-typedoc",
       {
         entryPoints: effectViewModules,
@@ -58,6 +63,29 @@ const config: Config = {
         hidePageTitle: false,
         excludeExternals: true,
         sidebar: { autoConfiguration: false },
+
+        // Members read as signatures and tables rather than as a ladder of nested headings.
+        hideBreadcrumbs: true,
+        useCodeBlocks: true,
+        expandObjects: true,
+        indexFormat: "table",
+        parametersFormat: "table",
+        interfacePropertiesFormat: "table",
+        classPropertiesFormat: "table",
+        typeAliasPropertiesFormat: "table",
+        enumMembersFormat: "table",
+        propertyMembersFormat: "table",
+        typeDeclarationFormat: "table",
+        tableColumnSettings: {
+          hideSources: true,
+          hideModifiers: true,
+          hideDefaults: true,
+          leftAlignHeaders: true,
+        },
+
+        // Link "Defined in" to the source on GitHub.
+        gitRevision: "master",
+        sourceLinkTemplate: "https://github.com/Thiladev/effect-view/blob/{gitRevision}/{path}#L{line}",
       },
     ],
   ],
@@ -116,6 +144,12 @@ const config: Config = {
           label: "API",
         },
         {
+          type: "doc",
+          docId: "changelog",
+          position: "left",
+          label: "Changelog",
+        },
+        {
           type: "docsVersionDropdown",
           position: "right",
         },
@@ -140,6 +174,10 @@ const config: Config = {
             {
               label: "Getting Started",
               to: "/docs/getting-started",
+            },
+            {
+              label: "Changelog",
+              to: "/docs/changelog",
             },
           ],
         },

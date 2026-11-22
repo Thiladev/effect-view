@@ -1,6 +1,7 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import { Array, type Context, Effect, Equal, Fiber, Option, Pipeable, Predicate, Schema, SchemaIssue, type Scope, Semaphore, Stream, SubscriptionRef } from "effect"
 import * as Form from "./Form.js"
+import * as FormBuffers from "./FormBuffers.js"
 import * as Lens from "./Lens.js"
 import * as View from "./View.js"
 
@@ -33,6 +34,7 @@ extends Pipeable.Class implements LensForm<A, I, RD, RE, TER, TEW, TRR, TRW> {
     readonly canCommit: View.View<boolean, never, never>
 
     constructor(
+        readonly buffers: FormBuffers.FormBuffers,
         readonly schema: Schema.ConstraintCodec<A, I, RD, RE>,
         readonly context: Context.Context<Scope.Scope | RD | RE | TRR | TRW>,
         readonly target: Lens.Lens<A, TER, TEW, TRR, TRW>,
@@ -176,6 +178,7 @@ export const make = Effect.fnUntraced(function* <A, I = A, RD = never, RE = neve
         )
 
     return new LensFormImpl(
+        yield* FormBuffers.make,
         options.schema,
         yield* Effect.context<Scope.Scope | RD | RE | TRR | TRW>(),
         options.target,

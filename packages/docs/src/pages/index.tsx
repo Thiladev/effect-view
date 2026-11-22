@@ -1,10 +1,36 @@
 import Link from "@docusaurus/Link"
-import CodeBlock from "@theme/CodeBlock"
 import Layout from "@theme/Layout"
 import clsx from "clsx"
+import { Highlight } from "prism-react-renderer"
 import type { ReactNode } from "react"
 
+import githubDark from "../prism/github-dark"
+
 import styles from "./index.module.css"
+
+// The terminals stay dark in both color modes, so they use the dark palette
+// rather than the one of the current color mode.
+function Code({ children }: { readonly children: string }): ReactNode {
+  return (
+    <Highlight theme={githubDark} code={children} language="tsx">
+      {({ tokens, getLineProps, getTokenProps }) => (
+        <pre className={styles.code}>
+          <code>
+            {tokens.map((line, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: the code is a constant, so its lines never reorder
+              <div key={i} {...getLineProps({ line })}>
+                {line.map((token, key) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the tokens of a line never reorder
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </code>
+        </pre>
+      )}
+    </Highlight>
+  )
+}
 
 const componentExample = `import { Effect } from "effect"
 import { Async, Component } from "effect-view"
@@ -35,51 +61,121 @@ export const UserCard = Component.make("UserCard")(
 
 const features = [
   {
-    icon: "fx",
-    title: "Components are Effect programs",
+    wide: true,
+    title: "React renders. Effect does the rest.",
     description:
-      "Yield Effects and services directly from a component body, then return ordinary JSX. Types track every dependency all the way to the runtime boundary.",
-    tag: "Component.make",
-    to: "/docs/getting-started#write-your-first-component",
+      "Effect View is not a framework: no router, no bundler, no renderer of its own. Components stay React components, and hooks and libraries keep working next to them. What it gives you is a place for everything that is not rendering. State, operations and IO live in Effect code and services you can name and test on their own, and the component reads them.",
+    file: "Counter.tsx",
+    code: `// Logic: plain Effect, no React involved
+const make = Effect.gen(function* () {
+  const count = Lens.fromSubscriptionRef(
+    yield* SubscriptionRef.make(0),
+  )
+  return { count, increment: Lens.update(count, (n) => n + 1) }
+})
+
+class CounterService extends Context.Service<
+  CounterService,
+  Effect.Success<typeof make>
+>()("CounterService") {
+  static readonly layer = Layer.effect(CounterService, make)
+}
+
+// Rendering: all the component does
+const Counter = Component.make("Counter")(function* () {
+  const counter = yield* CounterService
+  const [count] = yield* View.useAll([counter.count])
+  const runSync = yield* Component.useRunSync()
+
+  return <button onClick={() => runSync(counter.increment)}>{count}</button>
+}).pipe(Component.provide(CounterService.layer))`,
+    link: "A component with its logic as a service",
+    to: "/docs/common-patterns#a-component-with-its-logic-as-a-service",
   },
   {
-    icon: "R",
-    title: "One typed runtime",
+    title: "Services and layers, down the tree",
     description:
-      "Build your application Layer once. Components access HTTP clients, repositories, configuration, tracing, and your own services without React context plumbing.",
-    tag: "ReactRuntime",
-    to: "/docs/getting-started#create-the-runtime",
+      "Build one Layer for the application and provide it once. Any component yields the services it needs, and its type says which. Narrow a layer to a single component, or to a subtree, and extend the runtime per route. There is no context plumbing to write.",
+    file: "providers.tsx",
+    code: `// the whole application
+<ReactRuntime.Provider runtime={runtime}>
+  <App />
+</ReactRuntime.Provider>
+
+// one component, built per instance
+const GreetingViewLive = GreetingView.pipe(
+  Component.provide(GreetingService.layer),
+)
+
+// a subtree, from inside a component
+const context = yield* Component.useLayer(layer)`,
+    link: "Provide services to a subtree",
+    to: "/docs/getting-started#provide-services-to-a-subtree",
   },
   {
-    icon: "S",
-    title: "Scopes follow React",
+    title: "Every component owns a Scope",
     description:
-      "Every component owns an Effect Scope. Resources, subscriptions, and fibers are finalized when their component or dependency lifecycle ends.",
-    tag: "Scope.Scope",
+      "Acquire a resource, subscribe, or fork a fiber, and its release is tied to the component. The Scope closes when the component unmounts or when the dependencies of the effect that created the resource change. No cleanup bookkeeping.",
+    file: "Notifications.tsx",
+    code: `yield* Component.useOnMount(() =>
+  Effect.gen(function* () {
+    yield* Effect.addFinalizer(() =>
+      Console.log("Notifications unmounted"),
+    )
+    yield* Effect.forkScoped(pollNotifications)
+  }),
+)`,
+    link: "The component root scope",
     to: "/docs/getting-started#the-component-root-scope",
   },
   {
-    icon: "↔",
-    title: "Reactive state without a new universe",
+    title: "Reactive state, in or out of React",
     description:
-      "Lens and View connect Effect state to React. Focus large models into small writable values and subscribe only where rendering needs them.",
-    tag: "Lens + View",
+      "A Lens is a writable value that you can focus down to a single field, and a View is a read-only subscription. They live in services, outside any component, and several components can share them. A component re-renders only for what it reads.",
+    file: "ProfileEmail.tsx",
+    code: `const profile = Lens.focusObjectOn(app.state, "profile")
+const email = Lens.focusObjectOn(profile, "email")
+
+// re-renders only when the email changes
+const [value, setEmail] = yield* Lens.useState(email)
+
+// read-only, from any number of views
+const [name] = yield* View.useAll([app.userName])`,
+    link: "State management",
     to: "/docs/state-management",
   },
   {
-    icon: "Q",
-    title: "TanStack-shaped server state",
+    title: "Server state, with typed errors",
     description:
-      "Reactive keys, caching, stale times, background refresh, mutations, and invalidation—with typed Effect services, Causes, and scoped fibers underneath.",
-    tag: "Query + Mutation",
+      "Queries have reactive keys, caching, stale times, background refresh and invalidation. Mutations follow the same model. The query function is an Effect, so it uses your services, keeps its typed errors, and is interrupted when a newer key supersedes it.",
+    file: "PostView.tsx",
+    code: `const query = yield* Query.make({
+  key, // change the key, the query refetches
+  staleTime: "1 minute",
+  f: ([, id]) => fetchPost(id), // any Effect
+}).pipe(Query.thenRun)
+
+const [state] = yield* View.useAll([query.state])
+// state.result is an AsyncResult`,
+    link: "Query",
     to: "/docs/query",
   },
   {
-    icon: "Σ",
+    wide: true,
     title: "Forms driven by Schema",
     description:
-      "Keep input-friendly encoded values while application code receives validated, decoded types. Focus one root into reusable field-sized subforms.",
-    tag: "MutationForm + LensForm",
+      "Inputs work with the encoded value, usually a string, while your code receives the validated, decoded one. A single form focuses into field-sized subforms that bind to reusable inputs. An input is either live, validating as the user types, or buffered, validating when it is flushed, and submitting flushes them all.",
+    file: "RegisterForm.tsx",
+    code: `const form = yield* MutationForm.make({
+  schema: RegisterSchema,
+  initialEncodedValue: { email: "", password: "" },
+  f: ([value]) => register(value), // decoded and valid
+}).pipe(MutationForm.thenRun)
+
+const email = Form.focusObjectOn(form, "email")
+const input = yield* Form.useBufferedInput(email)
+// { value, setValue, flush, flushed }`,
+    link: "Forms",
     to: "/docs/forms",
   },
 ] as const
@@ -112,9 +208,9 @@ export default function Home(): ReactNode {
               </h1>
 
               <p className={styles.lede}>
-                Bring typed services, scoped resources, reactive state,
-                server queries, and schema-driven forms into React without
-                hiding either framework.
+                A thin layer on top of React for writing components as Effect
+                programs. Move logic into typed services and Effect code, and
+                leave React to render.
               </p>
 
               <div className={styles.installBox}>
@@ -161,7 +257,7 @@ export default function Home(): ReactNode {
                   <span>UserCard.tsx</span>
                   <span className={styles.windowStatus}>Effect + JSX</span>
                 </div>
-                <CodeBlock language="tsx">{componentExample}</CodeBlock>
+                <Code>{componentExample}</Code>
                 <div className={styles.codeLegend}>
                   <span>
                     <b>01</b> Yield services
@@ -181,33 +277,36 @@ export default function Home(): ReactNode {
         <section className={clsx("container", styles.featuresSection)}>
           <div className={styles.sectionHeading}>
             <p className={styles.sectionKicker}>{"// Why Effect View"}</p>
-            <h2>One model from render to resources.</h2>
+            <h2>A thin layer on React, with the pieces UI work needs.</h2>
             <p>
-              Effect View adds the pieces React deliberately leaves open while
-              preserving the React component model you already know.
+              Effect View is not a framework. It adds what a UI keeps asking
+              for, such as services, resource lifetimes, state, server data
+              and forms, as Effect code, so that React is left with rendering.
             </p>
           </div>
 
           <div className={styles.featureGrid}>
-            {features.map((feature, index) => (
-              <Link
-                className={styles.featureCard}
-                to={feature.to}
+            {features.map((feature) => (
+              <article
+                className={clsx(
+                  styles.featureCard,
+                  "wide" in feature && styles.featureCardWide,
+                )}
                 key={feature.title}
               >
-                <div className={styles.cardTopline}>
-                  <span className={styles.featureIcon}>{feature.icon}</span>
-                  <span className={styles.cardIndex}>
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
+                <div className={styles.cardCopy}>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.description}</p>
                 </div>
-                <h3>{feature.title}</h3>
-                <p>{feature.description}</p>
-                <div className={styles.cardFooter}>
-                  <code>{feature.tag}</code>
-                  <span aria-hidden="true">↗</span>
+                <div className={styles.cardCode}>
+                  <div className={styles.cardCodeBar}>{feature.file}</div>
+                  <Code>{feature.code}</Code>
                 </div>
-              </Link>
+                <Link className={styles.cardLink} to={feature.to}>
+                  {feature.link}
+                  <span aria-hidden="true">→</span>
+                </Link>
+              </article>
             ))}
           </div>
         </section>

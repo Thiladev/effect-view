@@ -4,31 +4,29 @@ import { Component, Form, View } from "effect-view"
 import type * as React from "react"
 
 
-export declare namespace TextFieldOptionalFormInputView {
+export declare namespace TextFieldOptionalFormBufferedInputView {
     export interface Props<out P extends readonly PropertyKey[], A, ER, EW>
-    extends Omit<TextField.RootProps, "form" | "defaultValue">, Form.useOptionalInput.Options<string> {
+    extends Omit<TextField.RootProps, "form" | "defaultValue">, Form.useOptionalBufferedInput.Options<string> {
         readonly form: Form.Form<P, A, Option.Option<string>, ER, EW>
     }
 
     export type Signature = <P extends readonly PropertyKey[], A, ER, EW>(props: Props<P, A, ER, EW>) => React.ReactNode
 }
 
-export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalFormInputView")(function*(
-    props: TextFieldOptionalFormInputView.Props<readonly PropertyKey[], any, any, any>
+export const TextFieldOptionalFormBufferedInputView = Component.make("TextFieldOptionalFormBufferedInputView")(function*(
+    props: TextFieldOptionalFormBufferedInputView.Props<readonly PropertyKey[], any, any, any>
 ) {
-    const input = yield* Form.useOptionalInput(props.form, props)
-    const [issues, isValidating, isCommitting] = yield* View.useAll([
-        props.form.issues,
-        props.form.isValidating,
-        props.form.isCommitting,
-    ])
+    const input = yield* Form.useOptionalBufferedInput(props.form, props)
+    const status = yield* Form.useStatus(props.form)
+    const [issues] = yield* View.useAll([props.form.issues])
 
     return (
         <Flex direction="column" gap="1">
             <TextField.Root
                 value={input.value}
                 onChange={e => input.setValue(e.target.value)}
-                disabled={!input.enabled || isCommitting}
+                onBlur={input.flush}
+                disabled={!input.enabled || status.isCommitting}
                 {...Struct.omit(props, ["form", "defaultValue"])}
             >
                 <TextField.Slot side="left">
@@ -39,7 +37,7 @@ export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalF
                     />
                 </TextField.Slot>
 
-                {isValidating &&
+                {status.isValidating &&
                     <TextField.Slot side="right">
                         <Spinner />
                     </TextField.Slot>
@@ -48,7 +46,7 @@ export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalF
                 {props.children}
             </TextField.Root>
 
-            {Option.match(Array.head(issues), {
+            {input.flushed && Option.match(Array.head(issues), {
                 onSome: issue => (
                     <Callout.Root>
                         <Callout.Text>{issue.message}</Callout.Text>
@@ -60,5 +58,5 @@ export const TextFieldOptionalFormInputView = Component.make("TextFieldOptionalF
         </Flex>
     )
 }).pipe(
-    Component.withSignature<TextFieldOptionalFormInputView.Signature>()
+    Component.withSignature<TextFieldOptionalFormBufferedInputView.Signature>(),
 )

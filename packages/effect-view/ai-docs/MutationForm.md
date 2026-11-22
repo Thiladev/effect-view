@@ -4,7 +4,7 @@ A root form (implements `Form.Form`, see `Form.md`) that owns a local encoded dr
 
 ```tsx
 import { Effect } from "effect"
-import { Component, MutationForm, View } from "effect-view"
+import { Component, Form, MutationForm } from "effect-view"
 
 const form = yield* Component.useOnMount(() =>
   MutationForm.make({
@@ -14,18 +14,18 @@ const form = yield* Component.useOnMount(() =>
   }).pipe(MutationForm.thenRun),
 )
 
-const [canCommit, isCommitting] = yield* View.useAll([form.canCommit, form.isCommitting])
+const { isCommitting } = yield* Form.useStatus(form)
 const runPromise = yield* Component.useRunPromise()
 
-<button disabled={!canCommit || isCommitting} onClick={() => void runPromise(form.submit)}>
+<button disabled={isCommitting} onClick={() => void runPromise(form.submit)}>
   {isCommitting ? "Creating..." : "Create profile"}
 </button>
 ```
 
 - `MutationForm.make({ schema, initialEncodedValue, f })` constructs the form; the underlying `Mutation`'s input key is the tuple `[decodedValue, form]`, not just the decoded value. Most `f` implementations only destructure the first element (`profile.age` is a number even though the input edited a string); `form` is included so `f` can, if needed, read other form state (e.g. `form.issues`, `form.encodedValue`) while handling the submission. `MutationForm.thenRun` starts initial validation in the current scope.
 - Create once and keep stable — the usual home is `Component.useOnMount`.
-- `form.submit` runs the mutation only when the form can currently commit; schema issues block submission before the mutation ever runs.
-- Focus into subforms/fields with `Form.focusObjectOn`/`focusArrayAt`/etc. (see `Form.md`) and bind them to inputs with `Form.useInput`.
+- `form.submit` flushes the inputs and decodes the current encoded value before it reads the value, so it never submits a value older than what the user typed. It runs the mutation only when the form can currently commit; schema issues block submission before the mutation ever runs. Don't disable the submit button on `canCommit`: submitting is what flushes the inputs and shows their issues.
+- Focus into subforms/fields with `Form.focusObjectOn`/`focusArrayAt`/etc. (see `Form.md`) and bind them to inputs with `Form.useLiveInput`.
 - If `f` fails with a `Schema.SchemaError`, `form.submit` formats that error into `form.issues` automatically — the same formatting path used for client-side decoding errors — instead of only surfacing it as a mutation failure. Any other failure from `f` is left as the mutation's `Failure` and does not touch `form.issues`.
 
 ## Example: schema-owned date conversion

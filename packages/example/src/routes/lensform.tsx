@@ -2,7 +2,7 @@ import { Container, Flex } from "@radix-ui/themes"
 import { createFileRoute } from "@tanstack/react-router"
 import { Console, Context, Effect, Layer, Schema, Stream, SubscriptionRef } from "effect"
 import { Component, Form, Lens, LensForm } from "effect-view"
-import { TextFieldFormInputView } from "@/lib/form/TextFieldFormInputView"
+import { TextFieldFormLiveInputView } from "@/lib/form/TextFieldFormLiveInputView"
 import { runtime } from "@/runtime"
 
 
@@ -69,7 +69,7 @@ const LensFormPageView = Component.make("LensFormPage")(function*() {
         return [emailField, passwordField] as const
     }))
 
-    const TextFieldFormInput = yield* TextFieldFormInputView.use
+    const TextFieldFormInput = yield* TextFieldFormLiveInputView.use
 
 
     return (

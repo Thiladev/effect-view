@@ -503,9 +503,9 @@ describe("Component", () => {
         let view!: ReturnType<typeof render>
         await act(async () => {
             view = render(
-                <ReactRuntime.Provider runtime={runtime} fallback={<div>fallback</div>}>
+                <ReactRuntime.AsyncProvider runtime={runtime} fallback={<div>fallback</div>}>
                     <Suspended />
-                </ReactRuntime.Provider>
+                </ReactRuntime.AsyncProvider>
             )
         })
 

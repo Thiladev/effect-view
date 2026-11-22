@@ -22,4 +22,4 @@ const [savedProfile, isCommitting] = yield* View.useAll([profile, form.isCommitt
 - `LensForm.make({ schema, target, initialEncodedValue? })` — `target` holds decoded data. `LensForm.thenRun` starts synchronization.
 - A valid edit is decoded and written to `target` automatically; an invalid edit stays in the form (so the user can correct it) and never reaches `target`. If something else updates `target`, `LensForm` encodes that value back into the draft.
 - Pass `initialEncodedValue` only when the first draft should differ from the encoded target; otherwise `LensForm.make` derives the initial draft by encoding the current target through the schema.
-- No `submit` method — commits happen continuously as valid edits arrive. Focus into subforms/fields with `Form.focusObjectOn`/etc. and bind with `Form.useInput` exactly as with `MutationForm` (see `Form.md`).
+- No `submit` method — commits happen continuously as valid edits arrive. Focus into subforms/fields with `Form.focusObjectOn`/etc. and bind with `Form.useLiveInput` exactly as with `MutationForm` (see `Form.md`).

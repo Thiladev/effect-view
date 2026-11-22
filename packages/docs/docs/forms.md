@@ -67,7 +67,7 @@ runs the mutation only when the form can commit.
 
 ```tsx
 import { Effect } from "effect"
-import { Component, MutationForm, View } from "effect-view"
+import { Component, Form, MutationForm } from "effect-view"
 
 const CreateProfileView = Component.make("CreateProfile")(function* () {
   const form = yield* Component.useOnMount(() =>
@@ -85,16 +85,13 @@ const CreateProfileView = Component.make("CreateProfile")(function* () {
     }).pipe(MutationForm.thenRun),
   )
 
-  const [canCommit, isCommitting] = yield* View.useAll([
-    form.canCommit,
-    form.isCommitting,
-  ])
+  const { isCommitting } = yield* Form.useStatus(form)
   const runPromise = yield* Component.useRunPromise()
 
   // Focused inputs are added in "Focus into subforms" below.
   return (
     <button
-      disabled={!canCommit || isCommitting}
+      disabled={isCommitting}
       onClick={() => void runPromise(form.submit)}
     >
       {isCommitting ? "Creating..." : "Create profile"}
@@ -226,120 +223,6 @@ Schema issue paths are focused at the same time. A component receiving
 `emailField` gets its email issues directly instead of searching through every
 issue on the root form.
 
-## Bind a subform to an input
-
-`Form.useInput` is the liaison between an Effect form and a React controlled
-component. It reads the subform's encoded value and returns the familiar React
-`{ value, setValue }` interface. Calling `setValue` updates the form, which in
-turn runs the schema pipeline and updates validation state.
-
-```tsx
-const input = yield* Form.useInput(emailField, {
-  debounce: "250 millis",
-})
-
-return (
-  <input
-    value={input.value}
-    onChange={(event) => input.setValue(event.currentTarget.value)}
-  />
-)
-```
-
-The debounce is useful for text inputs, which can otherwise update the form and
-run schema validation on every keystroke. The displayed value still updates
-immediately; propagation to the form waits until the user pauses typing.
-
-Use `Form.useOptionalInput` when the encoded field is an Effect `Option`. It
-returns `value` and `setValue` together with `enabled` and `setEnabled`, making
-it suitable for an optional input that the user can toggle on and off.
-
-Use `Form.useStatus` for displayed form status. It debounces short-lived state
-changes, avoiding flicker in pending indicators.
-
-```tsx
-const { isValidating, isCommitting, canCommit } = yield* Form.useStatus(form)
-```
-
-`useInput` and `useOptionalInput` can be used directly, but they are primarily
-building blocks for your own reusable input components. A component library
-can wrap them to consistently handle labels, validation issues, validating
-indicators, disabled state, accessibility, styling, and a standard debounce.
-Because both hooks accept a `Form.Form`, the same input components work with
-subforms from both `MutationForm` and `LensForm`.
-
-```tsx title="TextFieldFormInputView.tsx"
-import { Callout, Flex, Spinner, TextField } from "@radix-ui/themes"
-import { Array, Option, Struct } from "effect"
-import { Component, Form, View } from "effect-view"
-import type * as React from "react"
-
-export declare namespace TextFieldFormInputView {
-  export interface Props<
-    out P extends readonly PropertyKey[],
-    A,
-    ER,
-    EW,
-  > extends Omit<TextField.RootProps, "form">,
-      Form.useInput.Options {
-    readonly form: Form.Form<P, A, string, ER, EW>
-  }
-
-  export type Signature = <
-    P extends readonly PropertyKey[],
-    A,
-    ER,
-    EW,
-  >(
-    props: Props<P, A, ER, EW>,
-  ) => React.ReactNode
-}
-
-export const TextFieldFormInputView = Component.make(
-  "TextFieldFormInputView",
-)(function* (
-  props: TextFieldFormInputView.Props<
-    readonly PropertyKey[],
-    any,
-    any,
-    any
-  >,
-) {
-  const input = yield* Form.useInput(props.form, props)
-  const [issues] = yield* View.useAll([props.form.issues])
-  const { isValidating, isCommitting } = yield* Form.useStatus(props.form)
-
-  return (
-    <Flex direction="column" gap="1">
-      <TextField.Root
-        value={input.value}
-        onChange={(event) => input.setValue(event.target.value)}
-        disabled={isCommitting}
-        {...Struct.omit(props, ["form", "debounce"])}
-      >
-        {isValidating && (
-          <TextField.Slot side="right">
-            <Spinner />
-          </TextField.Slot>
-        )}
-        {props.children}
-      </TextField.Root>
-
-      {Option.match(Array.head(issues), {
-        onSome: (issue) => (
-          <Callout.Root>
-            <Callout.Text>{issue.message}</Callout.Text>
-          </Callout.Root>
-        ),
-        onNone: () => null,
-      })}
-    </Flex>
-  )
-}).pipe(
-  Component.withSignature<TextFieldFormInputView.Signature>(),
-)
-```
-
 ## The common Form model
 
 Both root implementations and every focused subform implement `Form.Form`.
@@ -355,9 +238,221 @@ They expose the schema pipeline as reactive Lenses and Views:
 | `isCommitting` | Whether a mutation or target write is in progress. |
 
 The form model itself is Effect code. Effect View adds the React-facing hooks,
-including `Form.useInput`, `Form.useOptionalInput`, and `Form.useStatus`, while
-your own component library remains responsible for rendering controls and
-layout.
+including `Form.useLiveInput`, `Form.useOptionalLiveInput`, `Form.useBufferedInput`,
+`Form.useOptionalBufferedInput`, and `Form.useStatus`, while your own component
+library remains responsible for rendering controls and layout.
+
+## Bind a subform to an input
+
+An input hook is the liaison between an Effect form and a React controlled
+component. It reads the subform's encoded value and returns the familiar React
+`{ value, setValue }` interface, and decides **when** the value is written to the
+form, which is what runs the schema pipeline and updates validation state.
+
+There are two variants, which differ only in that moment. Pick the one that fits
+the field and the kind of form it belongs to:
+
+| | Live inputs | Buffered inputs |
+| --- | --- | --- |
+| Hooks | `useLiveInput`, `useOptionalLiveInput` | `useBufferedInput`, `useOptionalBufferedInput` |
+| Writes to the form | on every `setValue` (optionally debounced) | when `flush()` is called, and on submit |
+| Validation runs | while the user is typing | once the user is done editing |
+| Typical form | `LensForm` | `MutationForm` |
+
+Both variants return `{ value, setValue, flush, flushed }`. Call `flush` when
+the user is done with the input, for example in `onBlur`. `flushed` becomes
+`true` once the input has been flushed, either by `flush` or by
+`MutationForm.submit`.
+
+Each variant has an optional counterpart for a field whose encoded value is an
+Effect `Option`. It returns `enabled` and `setEnabled` in addition, making it
+suitable for an optional input that the user can toggle on and off. `value` and
+`setValue` operate on the unwrapped value, and the required `defaultValue` is
+used as `value` while the field is disabled.
+
+### Live inputs
+
+`Form.useLiveInput` writes to the form each time `setValue` is called, so the
+schema runs, and issues update, as the user types.
+
+```tsx
+const input = yield* Form.useLiveInput(emailField, {
+  debounce: "250 millis",
+})
+
+return (
+  <input
+    value={input.value}
+    onChange={(event) => input.setValue(event.currentTarget.value)}
+  />
+)
+```
+
+Use it when the form should follow the input continuously:
+
+- **`LensForm` fields.** There is no submit step, so the target stays
+  synchronized with every valid edit.
+- **Live feedback.** Search boxes, filters, and previews that react to each
+  change.
+- **Controls that change in one gesture.** Checkboxes, selects, switches, and
+  sliders, where there is no "mid-edit" state to protect.
+
+The `debounce` option is useful for text inputs, which would otherwise validate
+on every keystroke. The displayed value still updates immediately; propagation to
+the form waits until the user pauses typing. A value still waiting for its
+debounce when `MutationForm.submit` runs is written first, so pressing Enter
+right after typing submits what the user typed.
+
+Call `flush()` when the user is done with the input, for example in `onBlur`. It
+writes the value right away instead of waiting for the debounce.
+
+`Form.useOptionalLiveInput(form, { defaultValue, debounce? })` is the
+optional counterpart.
+
+### Buffered inputs
+
+`Form.useBufferedInput` keeps the value locally while the user types and writes it to
+the form only when the returned `flush()` is called. The form is not validated
+mid-edit, so an incomplete value does not show an error before the user has
+finished entering it.
+
+```tsx
+const input = yield* Form.useBufferedInput(emailField)
+
+return (
+  <input
+    value={input.value}
+    onChange={(event) => input.setValue(event.currentTarget.value)}
+    onBlur={input.flush}
+  />
+)
+```
+
+Use it when validating while typing would get in the way:
+
+- **`MutationForm` fields.** The value is only needed when the form is
+  submitted, so there is no reason to validate each keystroke.
+- **Text fields with format rules.** An email address or a password is invalid
+  until the user has typed enough of it, and an error shown after the first
+  character is noise.
+- **Expensive or asynchronous validation.** A schema that calls a server, for
+  example to check that a username is free, runs once per field instead of once
+  per keystroke.
+
+`Form.useOptionalBufferedInput(form, { defaultValue })` is the optional counterpart.
+Toggling `enabled` writes right away, since a toggle is a completed action
+rather than something being typed.
+
+A few details are worth knowing:
+
+- `flush` means "the user is done editing this input". It is not tied to the DOM,
+  so call it from whatever your renderer offers; in a DOM input, that is
+  `onBlur`. It returns a `Promise` that resolves once the value has been written
+  to the form and validated.
+- There is no `debounce` option: nothing is written while typing, so there is
+  nothing to debounce.
+- A value that has not been written yet is also written when
+  `MutationForm.submit` runs. Pressing Enter in a field without leaving it
+  therefore submits what the user typed, not the previous value.
+- A `LensForm` has no submit step, so a buffered input only reaches the target when
+  `flush` is called. Prefer live inputs there, or make sure `flush` is wired.
+- An input that unmounts before it is flushed or submitted drops its pending
+  value.
+
+### Display the form status
+
+Use `Form.useStatus` for displayed form status. It debounces short-lived state
+changes, avoiding flicker in pending indicators.
+
+```tsx
+const { isValidating, isCommitting, canCommit } = yield* Form.useStatus(form)
+```
+
+### Build reusable input components
+
+The input hooks can be used directly, but they are primarily building blocks for
+your own reusable input components. A component library can wrap them to
+consistently handle labels, validation issues, validating indicators, disabled
+state, accessibility, styling, and a standard debounce. Because they accept a
+`Form.Form`, the same input components work with subforms from both
+`MutationForm` and `LensForm`.
+
+A library typically provides one wrapper per variant. This one wraps
+`useLiveInput`; the buffered wrapper is identical except that it calls
+`Form.useBufferedInput(props.form)` and drops the `debounce` option.
+
+```tsx title="TextFieldFormLiveInputView.tsx"
+import { Callout, Flex, Spinner, TextField } from "@radix-ui/themes"
+import { Array, Option, Struct } from "effect"
+import { Component, Form, View } from "effect-view"
+import type * as React from "react"
+
+export declare namespace TextFieldFormLiveInputView {
+  export interface Props<
+    out P extends readonly PropertyKey[],
+    A,
+    ER,
+    EW,
+  > extends Omit<TextField.RootProps, "form">,
+      Form.useLiveInput.Options {
+    readonly form: Form.Form<P, A, string, ER, EW>
+  }
+
+  export type Signature = <
+    P extends readonly PropertyKey[],
+    A,
+    ER,
+    EW,
+  >(
+    props: Props<P, A, ER, EW>,
+  ) => React.ReactNode
+}
+
+export const TextFieldFormLiveInputView = Component.make(
+  "TextFieldFormLiveInputView",
+)(function* (
+  props: TextFieldFormLiveInputView.Props<
+    readonly PropertyKey[],
+    any,
+    any,
+    any
+  >,
+) {
+  const input = yield* Form.useLiveInput(props.form, props)
+  const [issues] = yield* View.useAll([props.form.issues])
+  const { isValidating, isCommitting } = yield* Form.useStatus(props.form)
+
+  return (
+    <Flex direction="column" gap="1">
+      <TextField.Root
+        value={input.value}
+        onChange={(event) => input.setValue(event.target.value)}
+        onBlur={input.flush}
+        disabled={isCommitting}
+        {...Struct.omit(props, ["form", "debounce"])}
+      >
+        {isValidating && (
+          <TextField.Slot side="right">
+            <Spinner />
+          </TextField.Slot>
+        )}
+        {props.children}
+      </TextField.Root>
+
+      {input.flushed && Option.match(Array.head(issues), {
+        onSome: (issue) => (
+          <Callout.Root>
+            <Callout.Text>{issue.message}</Callout.Text>
+          </Callout.Root>
+        ),
+        onNone: () => null,
+      })}
+    </Flex>
+  )
+}).pipe(
+  Component.withSignature<TextFieldFormLiveInputView.Signature>(),
+)
+```
 
 ## Example: local date input, UTC domain value
 
@@ -443,8 +538,8 @@ const AppointmentView = Component.make("Appointment")(function* () {
     }),
   )
 
-  const startsAt = yield* Form.useInput(startsAtField)
-  const { canCommit } = yield* Form.useStatus(form)
+  const startsAt = yield* Form.useLiveInput(startsAtField)
+  const { isCommitting } = yield* Form.useStatus(form)
   const runPromise = yield* Component.useRunPromise()
 
   return (
@@ -461,7 +556,7 @@ const AppointmentView = Component.make("Appointment")(function* () {
           startsAt.setValue(event.currentTarget.value)
         }
       />
-      <button disabled={!canCommit}>Save appointment</button>
+      <button disabled={isCommitting}>Save appointment</button>
     </form>
   )
 })

@@ -22,7 +22,7 @@ import { App } from "./App"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ReactRuntime.Provider runtime={runtime} fallback={<p>Starting...</p>}>
+    <ReactRuntime.Provider runtime={runtime}>
       <App />
     </ReactRuntime.Provider>
   </StrictMode>,
@@ -30,7 +30,15 @@ createRoot(document.getElementById("root")!).render(
 ```
 
 - `ReactRuntime.make(layer)` creates a `React.Context` and holds the layer. Define it at module scope — never inside a render.
-- `ReactRuntime.Provider` builds the runtime layer (which can suspend, hence `fallback`), makes the resulting context available via React context, and disposes the managed runtime on unmount.
+- `ReactRuntime.Provider` builds the runtime layer **synchronously** while rendering, makes the resulting context available via React context, and disposes the managed runtime on unmount. It throws if the layer is asynchronous.
+- `ReactRuntime.AsyncProvider` is the same for an asynchronous layer: it suspends until the layer is built and accepts the `Suspense` props, such as `fallback`.
+
+```tsx
+<ReactRuntime.AsyncProvider runtime={runtime} fallback={<p>Starting...</p>}>
+  <App />
+</ReactRuntime.AsyncProvider>
+```
+
 - With a router, keep the provider above the router provider. Put a React error boundary above it if runtime construction can fail.
 
 ## Extend it for a subtree
@@ -44,9 +52,11 @@ export const userRuntime = runtime.extend(CurrentUser.layer)
 
 ```tsx
 // layout route: provide it below the provider of the parent
-<ReactRuntime.Provider runtime={userRuntime} fallback={<p>Loading...</p>}>
+<ReactRuntime.Provider runtime={userRuntime}>
   <Outlet />
 </ReactRuntime.Provider>
+// or, if the layer is asynchronous:
+// <ReactRuntime.AsyncProvider runtime={userRuntime} fallback={<p>Loading...</p>}>
 ```
 
 ```tsx
@@ -57,12 +67,12 @@ const EditUser = Component.make("EditUser")(function* () {
 }).pipe(Component.withContext(userRuntime.context))
 ```
 
-- `runtime.extend(layer)` returns an extended runtime with the same public shape as `ReactRuntime`: `context`, `extend` and `pipe`. Its provider is rendered with `<ReactRuntime.Provider runtime={…}>`, like the root one.
+- `runtime.extend(layer)` returns an extended runtime with the same public shape as `ReactRuntime`: `context`, `extend` and `pipe`. Its provider is rendered with `<ReactRuntime.Provider runtime={…}>` or `<ReactRuntime.AsyncProvider runtime={…}>`, like the root one.
 - `layer` can require services of the parent.
 - Extended runtimes nest: `userRuntime.extend(DraftService.layer)`.
 - The layer is built each time the provider mounts and released after it unmounts (with the usual finalizer debounce). Leaving the subtree and coming back builds it again, so its state resets. Navigating between the routes below the provider keeps the services alive.
 - The services of the parent are shared with it, not built again.
-- An asynchronous layer suspends the provider: pass `fallback`. A failing layer goes to the nearest error boundary above the provider.
+- An asynchronous layer requires `AsyncProvider`, which suspends: pass `fallback`. A failing layer goes to the nearest error boundary above the provider.
 - The provider of the parent must be rendered above the provider of the extended runtime, or it throws.
 - The layer is static: it cannot depend on route params or props.
 - The services exist only in React. A router loader or `beforeLoad` cannot reach them.

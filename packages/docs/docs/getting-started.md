@@ -85,10 +85,8 @@ managed resources and a new React context on every render.
 ## Provide the runtime
 
 Place `ReactRuntime.Provider` above every Effect View entrypoint. The provider
-builds the runtime layer, makes its Effect context available through React, and
-disposes the managed runtime when the provider unmounts.
-
-Runtime construction can suspend, so give the provider a fallback:
+builds the runtime layer synchronously, makes its Effect context available
+through React, and disposes the managed runtime when the provider unmounts:
 
 ```tsx title="src/main.tsx"
 import { StrictMode } from "react"
@@ -99,10 +97,7 @@ import { runtime } from "./runtime"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ReactRuntime.Provider
-      runtime={runtime}
-      fallback={<p>Starting application...</p>}
-    >
+    <ReactRuntime.Provider runtime={runtime}>
       <App />
     </ReactRuntime.Provider>
   </StrictMode>,
@@ -112,13 +107,29 @@ createRoot(document.getElementById("root")!).render(
 With a router, keep the provider above the router provider:
 
 ```tsx
-<ReactRuntime.Provider runtime={runtime} fallback={<p>Starting...</p>}>
+<ReactRuntime.Provider runtime={runtime}>
   <RouterProvider router={router} />
 </ReactRuntime.Provider>
 ```
 
 If runtime layer construction can fail, place an appropriate React error
 boundary above `ReactRuntime.Provider` as well.
+
+### Layers built asynchronously
+
+`ReactRuntime.Provider` throws if the layer does not complete synchronously. If
+the runtime layer is asynchronous, for example because it loads configuration or
+opens a connection, use `ReactRuntime.AsyncProvider` instead. It suspends until
+the layer is built and displays its `fallback` in the meantime:
+
+```tsx
+<ReactRuntime.AsyncProvider
+  runtime={runtime}
+  fallback={<p>Starting application...</p>}
+>
+  <App />
+</ReactRuntime.AsyncProvider>
+```
 
 ## Write your first component
 
